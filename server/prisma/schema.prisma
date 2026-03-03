@@ -62,6 +62,17 @@ enum NotifType {
   RESCHEDULE_REJECTED
   EVENT_RESCHEDULED
   EVENT_INVITE
+  NEW_MESSAGE
+}
+
+enum ConvType {
+  DIRECT
+  GROUP
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
 }
 
 // ----------------------------------------------------
@@ -88,6 +99,8 @@ model User {
   projectMemberships ProjectEmployee[]
   rescheduleRequests RescheduleRequest[] @relation("RescheduleRequester")
   notifications      Notification[]
+  convMemberships    ConvMember[]
+  sentMessages       Message[]           @relation("MessageSender")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,9 +122,10 @@ model Project {
   arrId String? // Assigned ARR (Senior Management observer)
   arr   User?   @relation("ProjectARR", fields: [arrId], references: [id])
 
-  employees ProjectEmployee[]
-  tasks     Task[]
-  events    Event[]
+  employees     ProjectEmployee[]
+  tasks         Task[]
+  events        Event[]
+  conversations Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -158,8 +172,10 @@ model Task {
 
   collaborators User[] @relation("TaskCollaborators")
 
-  activities TaskActivity[]
-  checklist  ChecklistItem[]
+  activities    TaskActivity[]
+  checklist     ChecklistItem[]
+  decisions     Decision[]
+  conversations Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -200,6 +216,8 @@ model Event {
   participants       EventParticipant[]
   documents          EventDocument[]
   rescheduleRequests RescheduleRequest[]
+  decisions          Decision[]
+  conversations      Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,3 +289,69 @@ model TaskActivity {
 
   createdAt DateTime @default(now())
 }
+
+model Decision {
+  id        String   @id @default(uuid())
+  summary   String
+  
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  conversations Conversation[]
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Messaging ───────────────────────────────────────────────
+
+model Conversation {
+  id         String   @id @default(uuid())
+  type       ConvType
+  name       String?  // GROUP only
+  avatar     String?  // GROUP profile picture URL
+
+  // Optional context links
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskId     String?
+  task       Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  eventId    String?
+  event      Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  decisionId String?
+  decision   Decision? @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+
+  members    ConvMember[]
+  messages   Message[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ConvMember {
+  conversationId String
+  userId         String
+  role           MemberRole   @default(MEMBER)
+  joinedAt       DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  text           String
+
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+}
+

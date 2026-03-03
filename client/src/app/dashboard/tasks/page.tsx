@@ -384,7 +384,7 @@ function TaskRow({ task, onEdit, onDelete, canEdit, onStatusChange, onProgressCh
 }
 
 // ─── Modal Form ────────────────────────────────────────────────
-function TaskModal({ mode, task, projects, users, onClose, onSuccess }: { mode: "create" | "edit"; task?: Task; projects: ProjectOpt[]; users: UserOpt[]; onClose: () => void; onSuccess: () => void }) {
+function TaskModal({ mode, task, projects, users, onClose, onSuccess, prefillDecisionId }: { mode: "create" | "edit"; task?: Task; projects: ProjectOpt[]; users: UserOpt[]; onClose: () => void; onSuccess: () => void; prefillDecisionId?: string }) {
     const isEdit = mode === "edit";
     const [form, setForm] = useState({
         title: task?.title ?? "",
@@ -398,9 +398,17 @@ function TaskModal({ mode, task, projects, users, onClose, onSuccess }: { mode: 
         startDate: task?.startDate ? task.startDate.split('T')[0] : "",
         endDate: task?.endDate ? task.endDate.split('T')[0] : "",
         fileUrl: task?.fileUrl ?? "",
+        decisionId: prefillDecisionId ?? "",
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    // Fetch unlinked decisions for optional linking (only on create mode)
+    const { data: unlinkedDecisions = [] } = useQuery<{ id: string; summary: string; event: { title: string } }[]>({
+        queryKey: ["unlinked-decisions"],
+        queryFn: async () => (await api.get("/decisions/unlinked")).data.data,
+        enabled: !isEdit,
+    });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -418,6 +426,7 @@ function TaskModal({ mode, task, projects, users, onClose, onSuccess }: { mode: 
                 startDate: form.startDate ? new Date(form.startDate).toISOString() : undefined,
                 endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
                 fileUrl: form.fileUrl || undefined,
+                ...(!isEdit && form.decisionId ? { decisionId: form.decisionId } : {}),
             };
 
             if (isEdit && task) await api.patch(`/tasks/${task.id}`, payload);
@@ -579,6 +588,20 @@ function TaskModal({ mode, task, projects, users, onClose, onSuccess }: { mode: 
                             placeholder="https://drive.google.com/..."
                             className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white placeholder:text-slate-600 outline-none focus:border-indigo-500 transition-colors" />
                     </Field>
+
+                    {!isEdit && unlinkedDecisions.length > 0 && (
+                        <Field label="Link to a Decision (Optional)">
+                            <select value={form.decisionId} onChange={e => set("decisionId", e.target.value)}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500 transition-colors">
+                                <option value="">None</option>
+                                {unlinkedDecisions.map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        [{d.event.title}] {d.summary.length > 50 ? d.summary.slice(0, 50) + "..." : d.summary}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    )}
                 </div>
 
                 {/* Footer */}

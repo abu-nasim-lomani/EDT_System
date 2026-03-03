@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Trash, CheckCircle, MessageSquare } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Trash, CheckCircle, MessageSquare, Lightbulb, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -47,6 +47,7 @@ function EventsPageContent() {
     const [selected, setSelected] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"all" | "pending" | "archive">("all");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [decisionsEvent, setDecisionsEvent] = useState<(ApiEvent & { date: string; time: string; endTime: string; myStatus: string; isCreator: boolean }) | null>(null);
 
     // Modal states
     const [rescheduleEvent, setRescheduleEvent] = useState<(ApiEvent & { date: string; time: string; endTime: string; myStatus: string; isCreator: boolean }) | null>(null);
@@ -238,7 +239,7 @@ function EventsPageContent() {
                                 <p className="text-sm font-medium">No events found</p>
                             </div>
                         ) : (
-                            selectedEvents.map((evt) => <EventRow key={evt.id} event={evt} qc={qc} onReschedule={setRescheduleEvent} onRequestReschedule={setRequestRescheduleEvent} />)
+                            selectedEvents.map((evt) => <EventRow key={evt.id} event={evt} qc={qc} onReschedule={setRescheduleEvent} onRequestReschedule={setRequestRescheduleEvent} onViewDecisions={setDecisionsEvent} />)
                         )}
                     </div>
                 </div>
@@ -274,6 +275,16 @@ function EventsPageContent() {
                     requestId={reviewRequestId}
                     onClose={closeReviewModal}
                     onSuccess={() => { qc.invalidateQueries({ queryKey: ["events"] }); closeReviewModal(); }}
+                />
+            )}
+
+            {decisionsEvent && (
+                <EventDecisionsModal
+                    event={decisionsEvent}
+                    projects={projects}
+                    users={users}
+                    onClose={() => setDecisionsEvent(null)}
+                    onSuccess={() => { qc.invalidateQueries({ queryKey: ["tasks"] }); }}
                 />
             )}
         </div>
@@ -723,11 +734,12 @@ function ReviewRescheduleModal({ requestId, onClose, onSuccess }: {
     );
 }
 
-function EventRow({ event, qc, onReschedule, onRequestReschedule }: {
+function EventRow({ event, qc, onReschedule, onRequestReschedule, onViewDecisions }: {
     event: ApiEvent & { date: string, time: string, endTime: string, myStatus: string, isCreator: boolean },
     qc: QueryClient,
     onReschedule: (ev: typeof event) => void,
     onRequestReschedule: (ev: typeof event) => void,
+    onViewDecisions: (ev: typeof event) => void,
 }) {
     const myStatusConfig = {
         ACCEPTED: { label: "Accepted", cls: "badge-completed" },
@@ -810,6 +822,9 @@ function EventRow({ event, qc, onReschedule, onRequestReschedule }: {
                                             View Details
                                         </DropdownMenuItem>
                                     )}
+                                    <DropdownMenuItem onClick={() => onViewDecisions(event)} className="text-amber-400 focus:text-amber-300 focus:bg-amber-500/10 cursor-pointer">
+                                        <Lightbulb className="h-4 w-4 mr-2" /> View Decisions
+                                    </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
@@ -845,6 +860,261 @@ function EventRow({ event, qc, onReschedule, onRequestReschedule }: {
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ── EventDecisionsModal ──
+interface Decision {
+    id: string;
+    summary: string;
+    eventId: string;
+    taskId: string | null;
+    createdAt: string;
+    task?: { id: string; title: string; status: string } | null;
+}
+
+function EventDecisionsModal({ event, projects, users, onClose, onSuccess }: {
+    event: ApiEvent & { date: string; time: string; endTime: string };
+    projects: { id: string; name: string }[];
+    users: { id: string; name: string; avatar?: string }[];
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    const qc = useQueryClient();
+    const [newDecision, setNewDecision] = useState("");
+    const [savingDecision, setSavingDecision] = useState(false);
+    const [convertDecision, setConvertDecision] = useState<Decision | null>(null);
+
+    const { data: decisions = [], isLoading, refetch } = useQuery<Decision[]>({
+        queryKey: ["event-decisions", event.id],
+        queryFn: async () => (await api.get(`/events/${event.id}/decisions`)).data.data,
+    });
+
+    const addDecision = async () => {
+        if (!newDecision.trim()) return;
+        setSavingDecision(true);
+        try {
+            await api.post(`/events/${event.id}/decisions`, { summary: newDecision.trim() });
+            setNewDecision("");
+            refetch();
+        } catch (e) { console.error(e); }
+        finally { setSavingDecision(false); }
+    };
+
+    if (convertDecision) {
+        return (
+            <ConvertDecisionToTaskModal
+                decision={convertDecision}
+                event={event}
+                projects={projects}
+                users={users}
+                onClose={() => setConvertDecision(null)}
+                onSuccess={() => { setConvertDecision(null); refetch(); onSuccess(); }}
+            />
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
+                    <div>
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Lightbulb className="h-5 w-5 text-amber-400" /> Meeting Decisions
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-0.5">{event.title}</p>
+                    </div>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
+                </div>
+
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[55vh]">
+                    {/* Add Decision */}
+                    <div className="flex gap-2">
+                        <input
+                            value={newDecision}
+                            onChange={e => setNewDecision(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") addDecision(); }}
+                            placeholder="Type a decision from this meeting..."
+                            className="flex-1 bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/30 transition-all placeholder:text-slate-600"
+                        />
+                        <Button onClick={addDecision} disabled={savingDecision || !newDecision.trim()} className="bg-amber-600 hover:bg-amber-500 text-white shrink-0">
+                            {savingDecision ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                        </Button>
+                    </div>
+
+                    {/* Decisions List */}
+                    {isLoading ? (
+                        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-indigo-500" /></div>
+                    ) : decisions.length === 0 ? (
+                        <div className="flex flex-col items-center py-10 text-slate-600">
+                            <Lightbulb className="h-8 w-8 mb-2 opacity-50" />
+                            <p className="text-sm">No decisions yet. Add one above.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {decisions.map(d => (
+                                <div key={d.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm text-slate-200">{d.summary}</p>
+                                        {d.task ? (
+                                            <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                                                <CheckCircle className="h-3 w-3" /> Linked to: {d.task.title}
+                                                <span className="ml-1 text-[10px] text-slate-500">({d.task.status})</span>
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs text-slate-500 mt-1">Not yet converted to task</p>
+                                        )}
+                                    </div>
+                                    {!d.task && (
+                                        <button
+                                            onClick={() => setConvertDecision(d)}
+                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-xs font-semibold transition-colors border border-indigo-500/25"
+                                        >
+                                            Convert <ArrowRight className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-slate-800">
+                    <Button variant="ghost" onClick={onClose} className="w-full text-slate-400 hover:text-white">Close</Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── ConvertDecisionToTaskModal ──
+function ConvertDecisionToTaskModal({ decision, event, projects, users, onClose, onSuccess }: {
+    decision: Decision;
+    event: ApiEvent;
+    projects: { id: string; name: string }[];
+    users: { id: string; name: string; avatar?: string }[];
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    const [form, setForm] = useState({
+        title: decision.summary,
+        projectId: event.project?.id ?? "",
+        assigneeId: "",
+        priority: "MINOR",
+        startDate: "",
+        endDate: "",
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!form.projectId || !form.assigneeId) {
+            setError("Project and Assignee are required.");
+            return;
+        }
+        setLoading(true); setError("");
+        try {
+            await api.post("/tasks", {
+                title: form.title,
+                projectId: form.projectId,
+                assigneeId: form.assigneeId,
+                priority: form.priority,
+                status: "PENDING",
+                startDate: form.startDate ? new Date(form.startDate).toISOString() : undefined,
+                endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+                decisionId: decision.id,
+            });
+            onSuccess();
+        } catch (err: unknown) {
+            const apiErr = err as { response?: { data?: { message?: string } } };
+            setError(apiErr.response?.data?.message || "Failed to create task.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+            <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                    <div>
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            <ArrowRight className="h-4 w-4 text-indigo-400" /> Convert to Task
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">Creates a task linked to this decision</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white"><XCircle className="h-4 w-4" /></button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    {error && <p className="text-xs text-rose-400 bg-rose-500/10 px-3 py-2 rounded-lg">{error}</p>}
+
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 mb-1.5">Task Title</label>
+                        <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required
+                            className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Project *</label>
+                            <select required value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500">
+                                <option value="">Select...</option>
+                                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Assign To *</label>
+                            <select required value={form.assigneeId} onChange={e => setForm({ ...form, assigneeId: e.target.value })}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500">
+                                <option value="">Select...</option>
+                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Priority</label>
+                            <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500">
+                                <option value="MINOR">Minor</option>
+                                <option value="MAJOR">Major</option>
+                                <option value="HIGH">High</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                        </div>
+                        <div></div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Start Date</label>
+                            <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500 [color-scheme:dark]" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Deadline</label>
+                            <input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })}
+                                className="w-full h-9 px-3 rounded-xl bg-slate-950/50 border border-slate-700 text-sm text-white outline-none focus:border-indigo-500 [color-scheme:dark]" />
+                        </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <p className="text-[11px] text-amber-400 font-medium">🔗 Decision Source: {decision.summary}</p>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 px-6 py-4 border-t border-slate-800">
+                    <Button type="button" variant="ghost" onClick={onClose} className="flex-1 text-slate-400 hover:text-white">Cancel</Button>
+                    <Button type="submit" disabled={loading} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white">
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Task"}
+                    </Button>
+                </div>
+            </form>
         </div>
     );
 }

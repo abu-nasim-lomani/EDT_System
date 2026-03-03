@@ -1,10 +1,13 @@
+"use client";
+
+import { useAuthStore } from "@/store/auth.store";
+import { SeniorManagementDashboard } from "@/components/dashboard/SeniorManagementDashboard";
+import { ProjectManagerDashboard } from "@/components/dashboard/ProjectManagerDashboard";
 import {
     Briefcase, CheckSquare, AlertTriangle,
     TrendingUp, TrendingDown, ArrowRight,
     CalendarDays, CheckCircle2, Clock
-} from "lucide-react";
-
-// ---- Types ----
+} from "lucide-react";// ---- Types ----
 interface MetricCardProps {
     title: string;
     value: string | number;
@@ -32,6 +35,16 @@ interface TimelineItemProps {
 
 // ---- Main Page ----
 export default function DashboardPage() {
+    const { user } = useAuthStore();
+
+    if (user?.role === "SENIOR_MANAGEMENT") {
+        return <SeniorManagementDashboard />;
+    }
+
+    if (user?.role === "PROJECT_MANAGER") {
+        return <ProjectManagerDashboard />;
+    }
+
     return (
         <div className="space-y-6">
 

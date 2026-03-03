@@ -17,9 +17,23 @@ notificationRouter.get("/", async (req: AuthRequest, res: Response): Promise<voi
     res.json({ success: true, data: notifications, unreadCount });
 });
 
-// ── PATCH /api/notifications/:id/read ────────────────────────────────────────
+// ── GET /api/notifications/messages ─── Message-only notifications ────────────
+notificationRouter.get("/messages", async (req: AuthRequest, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const notifications = await prisma.notification.findMany({
+        where: { userId, type: "NEW_MESSAGE" },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+    });
+    const unreadCount = await prisma.notification.count({
+        where: { userId, type: "NEW_MESSAGE", isRead: false },
+    });
+    res.json({ success: true, data: notifications, unreadCount });
+});
+
+// ── PATCH /api/notifications/:id/read ────────────────────────────────────────// Mark single as read
 notificationRouter.patch("/:id/read", async (req: AuthRequest, res: Response): Promise<void> => {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user!.userId;
     await prisma.notification.updateMany({
         where: { id, userId },

@@ -4,22 +4,21 @@ import { usePathname, useRouter } from "next/navigation";
 import {
     LayoutDashboard, Briefcase, CheckSquare,
     CalendarDays, AlertCircle, MessageSquare,
-    BarChart2, Ticket, StickyNote, FolderOpen,
+    BarChart2, Ticket, StickyNote,
     ListTodo, Activity, LogOut
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth.store";
 
 const routes = [
-    { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
     { label: "Projects", icon: Briefcase, href: "/dashboard/projects" },
     { label: "Tasks", icon: CheckSquare, href: "/dashboard/tasks" },
     { label: "Events", icon: CalendarDays, href: "/dashboard/events" },
     { label: "Conflicts", icon: AlertCircle, href: "/dashboard/conflicts" },
     { label: "Messages", icon: MessageSquare, href: "/dashboard/messages" },
     { label: "Reports", icon: BarChart2, href: "/dashboard/reports" },
-    { label: "Tickets", icon: Ticket, href: "/dashboard/tickets" },
+    { label: "Challenges", icon: Ticket, href: "/dashboard/tickets" },
     { label: "Notes", icon: StickyNote, href: "/dashboard/notes" },
-    { label: "Files", icon: FolderOpen, href: "/dashboard/files" },
     { label: "To-Do", icon: ListTodo, href: "/dashboard/todo" },
 ];
 

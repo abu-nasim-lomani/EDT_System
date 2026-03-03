@@ -21,6 +21,7 @@ const TaskSchema = z.object({
     collaboratorIds: z.array(z.string().uuid()).optional(),
     fileUrl: z.string().optional(),
     fileName: z.string().optional(),
+    decisionId: z.string().uuid().optional().nullable(), // Link task to a Decision
 });
 
 // Helper: recalculate parent task progress when a sub-task changes
@@ -96,7 +97,7 @@ taskRouter.post("/", async (req: AuthRequest, res: Response): Promise<void> => {
     const parsed = TaskSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ success: false, errors: parsed.error.flatten() }); return; }
 
-    const { collaboratorIds, ...rest } = parsed.data;
+    const { collaboratorIds, decisionId, ...rest } = parsed.data;
 
     const task = await prisma.task.create({
         data: {
@@ -113,6 +114,15 @@ taskRouter.post("/", async (req: AuthRequest, res: Response): Promise<void> => {
             collaborators: { select: { id: true, name: true } }
         },
     });
+
+    // If a decisionId was provided, link this new task to that Decision
+    if (decisionId) {
+        await prisma.decision.update({
+            where: { id: decisionId },
+            data: { taskId: task.id }
+        });
+    }
+
     res.status(201).json({ success: true, data: task });
 });
 

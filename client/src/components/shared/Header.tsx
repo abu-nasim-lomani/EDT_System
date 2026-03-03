@@ -1,8 +1,9 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Command, Plus, MessageSquare, CheckSquare, StickyNote, ListTodo, Ticket, Search } from "lucide-react";
+import { Command, Plus, CheckSquare, StickyNote, ListTodo, Ticket, Search } from "lucide-react";
 import Link from "next/link";
 import { NotificationBell } from "@/components/shared/NotificationBell";
+import { MessageBell } from "@/components/shared/MessageBell";
 
 const QUICK_ADD_ITEMS = [
     { label: "Add Task", icon: CheckSquare, href: "/dashboard/tasks?new=1", color: "text-blue-400" },
@@ -85,15 +86,8 @@ export function Header({ title = "Overview", subtitle = "" }: { title?: string; 
                 {/* ── Notification Bell ── */}
                 <NotificationBell />
 
-                {/* ── Message Icon ── */}
-                <Link
-                    href="/dashboard/messages"
-                    className="relative w-8 h-8 flex items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 hover:border-indigo-500/50 transition-colors text-slate-400 hover:text-white"
-                    title="Messages"
-                >
-                    <MessageSquare className="h-4 w-4" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500 border-2 border-[hsl(222,47%,10%)]" />
-                </Link>
+                {/* ── Message Bell (with unread count + sound) ── */}
+                <MessageBell />
 
                 <div className="h-5 w-px bg-slate-800" />
 

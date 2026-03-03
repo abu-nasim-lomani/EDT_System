@@ -164,3 +164,40 @@ eventRouter.get("/:id", async (req: AuthRequest, res: Response): Promise<void> =
     if (!event) { res.status(404).json({ success: false, message: "Event not found" }); return; }
     res.json({ success: true, data: event });
 });
+
+// ── GET /api/events/:id/decisions ──
+eventRouter.get("/:id/decisions", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const eventId = req.params.id;
+        const decisions = await prisma.decision.findMany({
+            where: { eventId },
+            include: {
+                task: {
+                    select: { id: true, title: true, status: true }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+        res.json({ success: true, data: decisions });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// ── POST /api/events/:id/decisions ──
+eventRouter.post("/:id/decisions", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const eventId = req.params.id;
+        const { summary } = req.body as { summary: string };
+        if (!summary?.trim()) {
+            res.status(400).json({ success: false, message: "Summary is required" });
+            return;
+        }
+        const decision = await prisma.decision.create({
+            data: { summary: summary.trim(), eventId }
+        });
+        res.status(201).json({ success: true, data: decision });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});

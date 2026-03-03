@@ -5,14 +5,14 @@ const connectionString = process.env.DATABASE_URL!;
 
 const adapter = new PrismaPg({ connectionString });
 
-const prismaClientSingleton = () => new PrismaClient({ adapter });
+const prismaClientSingleton = () => new PrismaClient({ adapter }) as unknown as PrismaClient;
 
 declare global {
     // eslint-disable-next-line no-var
-    var prismaGlobal: ReturnType<typeof prismaClientSingleton> | undefined;
+    var prismaGlobal: PrismaClient | undefined;
 }
 
-export const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+export const prisma: PrismaClient = globalThis.prismaGlobal ?? prismaClientSingleton();
 
 if (process.env.NODE_ENV !== "production") {
     globalThis.prismaGlobal = prisma;

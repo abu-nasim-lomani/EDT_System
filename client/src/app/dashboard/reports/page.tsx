@@ -6,42 +6,32 @@ import {
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────
+
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { Loader2 } from "lucide-react";
+
+// ─── Types ───────────────────────────────────────────────────
 type Period = "7d" | "30d" | "90d" | "all";
 
-// ─── Mock data ────────────────────────────────────────────────
-const PROJECT_STATUS = [
-    { label: "In Progress", value: 7, color: "#6366f1", pct: 58 },
-    { label: "Completed", value: 3, color: "#22c55e", pct: 25 },
-    { label: "Pending", value: 1, color: "#64748b", pct: 9 },
-    { label: "Stuck", value: 1, color: "#ef4444", pct: 8 },
-];
-
-const TASK_TREND = [
-    { label: "Mon", total: 24, done: 18 },
-    { label: "Tue", total: 30, done: 22 },
-    { label: "Wed", total: 28, done: 20 },
-    { label: "Thu", total: 35, done: 30 },
-    { label: "Fri", total: 32, done: 28 },
-    { label: "Sat", total: 10, done: 9 },
-    { label: "Sun", total: 8, done: 6 },
-];
-
-const EVENT_TYPES = [
-    { label: "Meetings", count: 14, color: "#3b82f6" },
-    { label: "Workshops", count: 5, color: "#8b5cf6" },
-    { label: "Seminars", count: 3, color: "#f59e0b" },
-    { label: "Trainings", count: 4, color: "#22c55e" },
-];
-
-const TEAM_PERF = [
-    { name: "Alpha Team", completion: 92, tasks: 48, initials: "AT", color: "#6366f1" },
-    { name: "Beta Team", completion: 78, tasks: 36, initials: "BT", color: "#22c55e" },
-    { name: "Gamma Team", completion: 65, tasks: 41, initials: "GT", color: "#f59e0b" },
-    { name: "Delta Team", completion: 55, tasks: 22, initials: "DT", color: "#ef4444" },
-];
+type ReportData = {
+    kpis: {
+        completionRate: number;
+        completedTasks: number;
+        totalTasks: number;
+        activeProjects: number;
+        totalEvents: number;
+        conflictRate: number;
+        conflictCount: number;
+    };
+    projectStatus: { label: string; status: string; color: string; value: number; pct: number }[];
+    taskTrend: { label: string; date: string; total: number; done: number }[];
+    eventTypes: { label: string; count: number; color: string }[];
+    teamPerformance: { name: string; initials: string; tasks: number; completion: number; color: string }[];
+};
 
 // ─── Donut Chart (pure SVG) ────────────────────────────────────
-function DonutChart({ segments }: { segments: typeof PROJECT_STATUS }) {
+function DonutChart({ segments }: { segments: ReportData["projectStatus"] }) {
     const total = segments.reduce((s, i) => s + i.value, 0);
     const r = 54; const cx = 64; const cy = 64;
     const circumference = 2 * Math.PI * r;
@@ -76,7 +66,7 @@ function DonutChart({ segments }: { segments: typeof PROJECT_STATUS }) {
 }
 
 // ─── Bar Chart (pure SVG) ──────────────────────────────────────
-function BarChart({ data }: { data: typeof TASK_TREND }) {
+function BarChart({ data }: { data: ReportData["taskTrend"] }) {
     const maxVal = Math.max(...data.map((d) => d.total));
     const W = 520; const H = 140; const barW = 40; const gap = 34;
 
@@ -118,10 +108,23 @@ function BarChart({ data }: { data: typeof TASK_TREND }) {
 export default function ReportsPage() {
     const [period, setPeriod] = useState<Period>("30d");
 
-    const totalEvents = EVENT_TYPES.reduce((s, e) => s + e.count, 0);
-    const totalTasks = TASK_TREND.reduce((s, d) => s + d.total, 0);
-    const completedTasks = TASK_TREND.reduce((s, d) => s + d.done, 0);
-    const completionRate = Math.round((completedTasks / totalTasks) * 100);
+    const { data: reportData, isLoading } = useQuery<ReportData>({
+        queryKey: ["reports", period],
+        queryFn: async () => {
+            const res = await api.get(`/dashboard/reports?period=${period}`);
+            return res.data.data;
+        }
+    });
+
+    if (isLoading || !reportData) {
+        return (
+            <div className="flex h-[calc(100vh-100px)] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+            </div>
+        );
+    }
+
+    const { kpis, projectStatus, taskTrend, eventTypes, teamPerformance } = reportData;
 
     return (
         <div className="space-y-5">
@@ -153,10 +156,10 @@ export default function ReportsPage() {
 
             {/* ── KPI Row ── */}
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                <KPICard title="Task Completion Rate" value={`${completionRate}%`} sub={`${completedTasks}/${totalTasks} tasks`} trend="+6% vs last period" up icon={CheckSquare} cls="metric-icon-emerald" />
-                <KPICard title="Active Projects" value="12" sub="7 in progress" trend="+2 this month" up icon={Briefcase} cls="metric-icon-indigo" />
-                <KPICard title="Events Held" value={totalEvents} sub="This period" trend="+3 vs last period" up icon={CalendarDays} cls="metric-icon-amber" />
-                <KPICard title="Conflict Rate" value="12%" sub="2 active conflicts" trend="-4% resolved" up icon={AlertTriangle} cls="metric-icon-rose" />
+                <KPICard title="Task Completion Rate" value={`${kpis.completionRate}%`} sub={`${kpis.completedTasks}/${kpis.totalTasks} tasks`} trend="Based on period" up={kpis.completionRate > 50} icon={CheckSquare} cls="metric-icon-emerald" />
+                <KPICard title="Active Projects" value={kpis.activeProjects} sub="Currently running" trend="Total in-progress" up icon={Briefcase} cls="metric-icon-indigo" />
+                <KPICard title="Events Held" value={kpis.totalEvents} sub="This period" trend="Scheduled events" up icon={CalendarDays} cls="metric-icon-amber" />
+                <KPICard title="Conflict Rate" value={`${kpis.conflictRate}%`} sub={`${kpis.conflictCount} active conflicts`} trend="Pending resolution" up={kpis.conflictRate < 10} icon={AlertTriangle} cls="metric-icon-rose" />
             </div>
 
             {/* ── Middle Row: Donut + Bar ── */}
@@ -168,27 +171,31 @@ export default function ReportsPage() {
                         <h3 className="text-sm font-semibold text-white">Project Status</h3>
                         <p className="text-xs text-slate-500 mt-0.5">Distribution across all projects</p>
                     </div>
-                    <div className="flex items-center gap-5">
-                        <div className="w-32 h-32 shrink-0">
-                            <DonutChart segments={PROJECT_STATUS} />
-                        </div>
-                        <div className="flex-1 space-y-2.5">
-                            {PROJECT_STATUS.map((seg) => (
-                                <div key={seg.label} className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
-                                        <span className="text-xs text-slate-400">{seg.label}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-20 h-1 rounded-full bg-slate-800 overflow-hidden">
-                                            <div className="h-full rounded-full" style={{ width: `${seg.pct}%`, background: seg.color }} />
+                    {projectStatus.reduce((s, p) => s + p.value, 0) === 0 ? (
+                        <div className="flex items-center justify-center h-48 text-sm text-slate-500">No projects data</div>
+                    ) : (
+                        <div className="flex items-center gap-5">
+                            <div className="w-32 h-32 shrink-0">
+                                <DonutChart segments={projectStatus} />
+                            </div>
+                            <div className="flex-1 space-y-2.5">
+                                {projectStatus.map((seg) => (
+                                    <div key={seg.label} className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: seg.color }} />
+                                            <span className="text-xs text-slate-400">{seg.label}</span>
                                         </div>
-                                        <span className="text-xs font-bold text-white w-3 text-right">{seg.value}</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-20 h-1 rounded-full bg-slate-800 overflow-hidden">
+                                                <div className="h-full rounded-full" style={{ width: `${seg.pct}%`, background: seg.color }} />
+                                            </div>
+                                            <span className="text-xs font-bold text-white w-3 text-right">{seg.value}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {/* Task Completion Bar Chart */}
@@ -203,7 +210,11 @@ export default function ReportsPage() {
                             <span className="flex items-center gap-1.5 text-indigo-400"><span className="w-2 h-2 rounded-sm bg-indigo-500" /> Completed</span>
                         </div>
                     </div>
-                    <BarChart data={TASK_TREND} />
+                    {taskTrend.reduce((s, t) => s + t.total, 0) === 0 ? (
+                        <div className="flex items-center justify-center h-40 text-sm text-slate-500">No tasks data in this period</div>
+                    ) : (
+                        <BarChart data={taskTrend} />
+                    )}
                 </div>
             </div>
 
@@ -214,52 +225,60 @@ export default function ReportsPage() {
                 <div className="edt-card p-5">
                     <div className="mb-4">
                         <h3 className="text-sm font-semibold text-white">Event Breakdown</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">By type — {totalEvents} total events</p>
+                        <p className="text-xs text-slate-500 mt-0.5">By type — {kpis.totalEvents} total events</p>
                     </div>
-                    <div className="space-y-4">
-                        {EVENT_TYPES.map((e) => {
-                            const pct = Math.round((e.count / totalEvents) * 100);
-                            return (
-                                <div key={e.label}>
-                                    <div className="flex justify-between mb-1.5 text-xs">
-                                        <span className="text-slate-300 font-medium">{e.label}</span>
-                                        <span className="font-bold text-white">{e.count} <span className="text-slate-500 font-normal">({pct}%)</span></span>
+                    {eventTypes.length === 0 ? (
+                        <div className="flex items-center justify-center h-32 text-sm text-slate-500">No events found</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {eventTypes.map((e) => {
+                                const pct = Math.round((e.count / kpis.totalEvents) * 100);
+                                return (
+                                    <div key={e.label}>
+                                        <div className="flex justify-between mb-1.5 text-xs">
+                                            <span className="text-slate-300 font-medium">{e.label}</span>
+                                            <span className="font-bold text-white">{e.count} <span className="text-slate-500 font-normal">({pct}%)</span></span>
+                                        </div>
+                                        <div className="edt-progress-track h-2">
+                                            <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: e.color, transition: "width 0.6s ease" }} />
+                                        </div>
                                     </div>
-                                    <div className="edt-progress-track h-2">
-                                        <div className="h-2 rounded-full" style={{ width: `${pct}%`, background: e.color, transition: "width 0.6s ease" }} />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 {/* Team Performance */}
                 <div className="edt-card overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-800">
                         <h3 className="text-sm font-semibold text-white">Team Performance</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">Task completion rate by team</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Task completion rate by user</p>
                     </div>
-                    <div className="divide-y divide-slate-800">
-                        {TEAM_PERF.map((team, i) => (
-                            <div key={team.name} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
-                                <span className="text-xs text-slate-600 w-4 font-mono">#{i + 1}</span>
-                                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: team.color + "33", border: `1px solid ${team.color}44`, color: team.color }}>
-                                    {team.initials}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-white">{team.name}</p>
-                                    <p className="text-xs text-slate-500">{team.tasks} tasks assigned</p>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${team.completion}%`, background: team.color, transition: "width 0.6s ease" }} />
+                    {teamPerformance.length === 0 ? (
+                        <div className="flex items-center justify-center p-8 text-sm text-slate-500">No active users found</div>
+                    ) : (
+                        <div className="divide-y divide-slate-800">
+                            {teamPerformance.map((team, i) => (
+                                <div key={team.name} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+                                    <span className="text-xs text-slate-600 w-4 font-mono">#{i + 1}</span>
+                                    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: team.color + "33", border: `1px solid ${team.color}44`, color: team.color }}>
+                                        {team.initials}
                                     </div>
-                                    <span className="text-sm font-bold text-white w-10 text-right">{team.completion}%</span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-white">{team.name}</p>
+                                        <p className="text-xs text-slate-500">{team.tasks} tasks assigned</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                            <div className="h-full rounded-full" style={{ width: `${team.completion}%`, background: team.color, transition: "width 0.6s ease" }} />
+                                        </div>
+                                        <span className="text-sm font-bold text-white w-10 text-right">{team.completion}%</span>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
             </div>
