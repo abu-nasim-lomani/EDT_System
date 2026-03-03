@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----------------------------------------------------
+// ENUMS
+// ----------------------------------------------------
+enum Role {
+  SENIOR_MANAGEMENT
+  PROJECT_MANAGER
+  EMPLOYEE
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MAJOR
+  MINOR
+}
+
+enum Status {
+  PENDING
+  IN_PROGRESS
+  STUCK
+  COMPLETED
+}
+
+enum EventStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// ----------------------------------------------------
+// MODELS
+// ----------------------------------------------------
+model User {
+  id          String  @id @default(uuid())
+  name        String
+  email       String  @unique
+  password    String
+  role        Role
+  designation String? // e.g., RR, DRR, ARR, Analyst
+  avatar      String? // Profile picture URL
+
+  // Relations
+  managedProjects    Project[]          @relation("ProjectManager")
+  arrProjects        Project[]          @relation("ProjectARR")
+  createdTasks       Task[]             @relation("TaskCreator")
+  assignedTasks      Task[]             @relation("TaskAssignee")
+  activities         TaskActivity[]     @relation("ActivityCreator")
+  collabTasks        Task[]             @relation("TaskCollaborators")
+  eventsCreated      Event[]            @relation("EventCreator")
+  eventInvites       EventParticipant[]
+  projectMemberships ProjectEmployee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  progress    Int       @default(0) // Computed Percentage 0-100
+  status      Status    @default(PENDING) // Overall phase
+  startDate   DateTime?
+  endDate     DateTime?
+
+  // Relations
+  managerId String
+  manager   User   @relation("ProjectManager", fields: [managerId], references: [id])
+
+  arrId String? // Assigned ARR (Senior Management observer)
+  arr   User?   @relation("ProjectARR", fields: [arrId], references: [id])
+
+  employees ProjectEmployee[]
+  tasks     Task[]
+  events    Event[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProjectEmployee {
+  projectId String
+  userId    String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  title       String
+  type        String?   @default("GENERAL") // Feature, Bug, Meeting, General, etc.
+  description String?
+  priority    Priority  @default(MINOR)
+  status      Status    @default(PENDING)
+  progress    Int       @default(0) // Manual percentage completion
+  startDate   DateTime?
+  endDate     DateTime?
+
+  fileUrl  String?
+  fileName String?
+
+  // Self-relation for subtasks
+  parentTaskId String?
+  parentTask   Task?   @relation("SubTasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subTasks     Task[]  @relation("SubTasks")
+
+  // Relations
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  creatorId String
+  creator   User   @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  collaborators User[] @relation("TaskCollaborators")
+
+  activities TaskActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  agenda      String?
+  startDate   DateTime
+  endDate     DateTime
+  status      EventStatus @default(SCHEDULED)
+  minutes     String? // Meeting decisions/discussions added after completion
+
+  // Self-Relation for linked follow-up events
+  previousEventId String?
+  previousEvent   Event?  @relation("EventChain", fields: [previousEventId], references: [id])
+  nextEvents      Event[] @relation("EventChain")
+
+  // Relations
+  projectId String? // Event can belong to a specific project
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  creatorId String
+  creator   User   @relation("EventCreator", fields: [creatorId], references: [id])
+
+  participants EventParticipant[]
+  documents    EventDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EventParticipant {
+  eventId       String
+  userId        String
+  status        InviteStatus @default(PENDING)
+  declineReason String? // e.g., "Conflict with another meeting"
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+}
+
+model EventDocument {
+  id       String @id @default(uuid())
+  fileName String
+  fileUrl  String
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model TaskActivity {
+  id      String @id @default(uuid())
+  content String
+  type    String @default("COMMENT") // "COMMENT" or "ACTIVITY"
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  creatorId String
+  creator   User   @relation("ActivityCreator", fields: [creatorId], references: [id])
+
+  createdAt DateTime @default(now())
+}

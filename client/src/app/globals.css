@@ -1,0 +1,203 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-base: 222 47% 9%;
+    --bg-card: 222 47% 13%;
+    --bg-sidebar: 222 47% 10%;
+    --border-subtle: 217 33% 20%;
+    --text-primary: 210 40% 95%;
+    --text-muted: 215 20% 55%;
+    --indigo: 239 84% 67%;
+    --emerald: 142 71% 45%;
+    --amber: 45 93% 47%;
+    --rose: 0 84% 60%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: hsl(217 33% 20%);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    background-color: hsl(222 47% 9%);
+    color: hsl(210 40% 95%);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Slim premium scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(217 33% 28%);
+    border-radius: 99px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(239 84% 67%);
+  }
+}
+
+/* ─── EDT Design Tokens ──────────────────────────────────────── */
+
+.edt-card {
+  background: hsl(222 47% 13%);
+  border: 1px solid hsl(217 33% 20%);
+  border-radius: 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.edt-card:hover {
+  border-color: hsl(239 60% 45%);
+  box-shadow: 0 0 0 1px hsl(239 60% 45%), 0 8px 32px hsl(222 47% 5% / 0.8);
+}
+
+.edt-card-glass {
+  background: linear-gradient(135deg, hsl(222 47% 15%) 0%, hsl(222 47% 12%) 100%);
+  border: 1px solid hsl(217 33% 22%);
+  border-radius: 16px;
+}
+
+.edt-sidebar {
+  background: hsl(222 47% 10%);
+  border-right: 1px solid hsl(217 33% 16%);
+}
+
+.edt-header {
+  background: hsl(222 47% 10% / 0.9);
+  border-bottom: 1px solid hsl(217 33% 16%);
+  backdrop-filter: blur(16px);
+}
+
+/* ─── Navigation ─────────────────────────────────────────────── */
+.edt-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(215 20% 55%);
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+
+.edt-nav-item:hover {
+  background: hsl(217 33% 17%);
+  color: hsl(210 40% 95%);
+}
+
+.edt-nav-item.active {
+  background: hsl(239 84% 67% / 0.15);
+  color: hsl(239 84% 75%);
+}
+
+/* ─── Status Badges ──────────────────────────────────────────── */
+.badge-in-progress {
+  background: hsl(217 91% 60% / 0.15);
+  color: hsl(217 91% 72%);
+  border: 1px solid hsl(217 91% 60% / 0.25);
+}
+
+.badge-pending {
+  background: hsl(217 33% 20%);
+  color: hsl(215 20% 65%);
+  border: 1px solid hsl(217 33% 28%);
+}
+
+.badge-stuck {
+  background: hsl(0 84% 60% / 0.15);
+  color: hsl(0 84% 72%);
+  border: 1px solid hsl(0 84% 60% / 0.25);
+}
+
+.badge-completed {
+  background: hsl(142 71% 45% / 0.15);
+  color: hsl(142 71% 57%);
+  border: 1px solid hsl(142 71% 45% / 0.25);
+}
+
+/* ─── Priority Badges ────────────────────────────────────────── */
+.priority-critical {
+  background: hsl(0 84% 60% / 0.15);
+  color: hsl(0 84% 72%);
+  border: 1px solid hsl(0 84% 60% / 0.25);
+}
+
+.priority-high {
+  background: hsl(25 95% 53% / 0.15);
+  color: hsl(25 95% 65%);
+  border: 1px solid hsl(25 95% 53% / 0.25);
+}
+
+.priority-major {
+  background: hsl(45 93% 47% / 0.15);
+  color: hsl(45 93% 59%);
+  border: 1px solid hsl(45 93% 47% / 0.25);
+}
+
+.priority-minor {
+  background: hsl(239 84% 67% / 0.15);
+  color: hsl(239 84% 77%);
+  border: 1px solid hsl(239 84% 67% / 0.25);
+}
+
+/* ─── Metric Icon Backgrounds ────────────────────────────────── */
+.metric-icon-indigo {
+  background: hsl(239 84% 67% / 0.15);
+  color: hsl(239 84% 77%);
+}
+
+.metric-icon-emerald {
+  background: hsl(142 71% 45% / 0.15);
+  color: hsl(142 71% 57%);
+}
+
+.metric-icon-amber {
+  background: hsl(45 93% 47% / 0.15);
+  color: hsl(45 93% 59%);
+}
+
+.metric-icon-rose {
+  background: hsl(0 84% 60% / 0.15);
+  color: hsl(0 84% 72%);
+}
+
+/* ─── Progress Bar ───────────────────────────────────────────── */
+.edt-progress-track {
+  background: hsl(217 33% 18%);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.edt-progress-fill {
+  background: linear-gradient(90deg, hsl(239 84% 60%) 0%, hsl(239 84% 72%) 100%);
+  border-radius: 99px;
+  height: 100%;
+  position: relative;
+}
+
+.edt-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.2), transparent);
+}
