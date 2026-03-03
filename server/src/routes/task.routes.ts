@@ -13,11 +13,11 @@ const TaskSchema = z.object({
     status: z.enum(["PENDING", "IN_PROGRESS", "STUCK", "COMPLETED"]).default("PENDING"),
     progress: z.number().min(0).max(100).optional(),
     type: z.string().optional(),
-    startDate: z.string().datetime({ offset: true }).optional(),
-    endDate: z.string().datetime({ offset: true }).optional(),
+    startDate: z.string().datetime({ offset: true }).optional().nullable(),
+    endDate: z.string().datetime({ offset: true }).optional().nullable(),
     projectId: z.string().uuid(),
-    parentTaskId: z.string().uuid().optional(),
-    assigneeId: z.string().uuid().optional(),
+    parentTaskId: z.string().uuid().optional().nullable(),
+    assigneeId: z.string().uuid().optional().nullable(),
     collaboratorIds: z.array(z.string().uuid()).optional(),
     fileUrl: z.string().optional(),
     fileName: z.string().optional(),
@@ -27,8 +27,8 @@ const TaskSchema = z.object({
 async function recalcParentProgress(parentTaskId: string) {
     const subTasks = await prisma.task.findMany({ where: { parentTaskId } });
     if (subTasks.length === 0) return;
-    const completed = subTasks.filter((t: { status: string }) => t.status === "COMPLETED").length;
-    const progress = Math.round((completed / subTasks.length) * 100);
+    const totalProgress = subTasks.reduce((sum, t) => sum + (t.progress || 0), 0);
+    const progress = Math.round(totalProgress / subTasks.length);
     const status = progress === 100 ? "COMPLETED" : progress > 0 ? "IN_PROGRESS" : "PENDING";
     await prisma.task.update({ where: { id: parentTaskId }, data: { status, progress } });
 }
@@ -37,8 +37,8 @@ async function recalcParentProgress(parentTaskId: string) {
 async function recalcProjectProgress(projectId: string) {
     const tasks = await prisma.task.findMany({ where: { projectId, parentTaskId: null } });
     if (tasks.length === 0) return;
-    const completed = tasks.filter((t: { status: string }) => t.status === "COMPLETED").length;
-    const progress = Math.round((completed / tasks.length) * 100);
+    const totalProgress = tasks.reduce((sum, t) => sum + (t.progress || 0), 0);
+    const progress = Math.round(totalProgress / tasks.length);
     const status = progress === 100 ? "COMPLETED" : progress > 0 ? "IN_PROGRESS" : "PENDING";
     await prisma.project.update({ where: { id: projectId }, data: { progress, status } });
 }
@@ -70,12 +70,14 @@ taskRouter.get("/:id", async (req: AuthRequest, res: Response): Promise<void> =>
         where: { id },
         include: {
             subTasks: {
-                orderBy: { createdAt: 'asc' }
+                orderBy: { createdAt: 'asc' },
+                include: { assignee: { select: { id: true, name: true, avatar: true } } }
             },
             creator: { select: { id: true, name: true, avatar: true } },
             assignee: { select: { id: true, name: true, avatar: true } },
             collaborators: { select: { id: true, name: true, avatar: true } },
             project: { select: { id: true, name: true } },
+            checklist: { orderBy: { createdAt: 'asc' } },
             activities: {
                 include: { creator: { select: { id: true, name: true, avatar: true } } },
                 orderBy: { createdAt: 'desc' }
@@ -117,12 +119,32 @@ taskRouter.post("/", async (req: AuthRequest, res: Response): Promise<void> => {
 taskRouter.patch("/:id", async (req: AuthRequest, res: Response): Promise<void> => {
     const id = req.params.id as string;
 
-    // We can reuse Zod's partial schema for updates
-    const updateSchema = TaskSchema.partial();
-    const parsed = updateSchema.safeParse(req.body);
+    const UpdateTaskSchema = z.object({
+        title: z.string().min(2).optional(),
+        description: z.string().optional(),
+        priority: z.enum(["CRITICAL", "HIGH", "MAJOR", "MINOR"]).optional(),
+        status: z.enum(["PENDING", "IN_PROGRESS", "STUCK", "COMPLETED"]).optional(),
+        progress: z.number().min(0).max(100).optional(),
+        type: z.string().optional(),
+        startDate: z.string().datetime({ offset: true }).optional().nullable(),
+        endDate: z.string().datetime({ offset: true }).optional().nullable(),
+        projectId: z.string().uuid().optional(),
+        parentTaskId: z.string().uuid().optional().nullable(),
+        assigneeId: z.string().uuid().optional().nullable(),
+        collaboratorIds: z.array(z.string().uuid()).optional(),
+        fileUrl: z.string().optional(),
+        fileName: z.string().optional(),
+    });
+    const parsed = UpdateTaskSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ success: false, errors: parsed.error.flatten() }); return; }
 
-    const { collaboratorIds, ...rest } = parsed.data;
+    let { collaboratorIds, ...rest } = parsed.data;
+
+    // Auto-transition to IN_PROGRESS if progress > 0 for a pending task
+    const currentTask = await prisma.task.findUnique({ where: { id } });
+    if (currentTask && currentTask.status === "PENDING" && rest.progress && rest.progress > 0) {
+        rest.status = "IN_PROGRESS";
+    }
 
     const task = await prisma.task.update({
         where: { id },
@@ -144,8 +166,37 @@ taskRouter.patch("/:id", async (req: AuthRequest, res: Response): Promise<void> 
 // ── DELETE /api/tasks/:id ──
 taskRouter.delete("/:id", async (req: AuthRequest, res: Response): Promise<void> => {
     const id = req.params.id as string;
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (!task) { res.status(404).json({ success: false, message: "Task not found" }); return; }
+
     await prisma.task.delete({ where: { id } });
+
+    if (task.parentTaskId) await recalcParentProgress(task.parentTaskId);
+    await recalcProjectProgress(task.projectId);
+
     res.json({ success: true, message: "Task deleted" });
+});
+
+// ── POST /api/tasks/:id/checklist ──
+taskRouter.post("/:id/checklist", async (req: AuthRequest, res: Response): Promise<void> => {
+    const id = req.params.id as string;
+    const { title } = req.body;
+    if (!title) { res.status(400).json({ success: false, message: "Title required" }); return; }
+    const item = await prisma.checklistItem.create({
+        data: { title, taskId: id }
+    });
+    res.json({ success: true, data: item });
+});
+
+// ── PATCH /api/tasks/checklist/:itemId ──
+taskRouter.patch("/checklist/:itemId", async (req: AuthRequest, res: Response): Promise<void> => {
+    const itemId = req.params.itemId as string;
+    const { isDone } = req.body;
+    const item = await prisma.checklistItem.update({
+        where: { id: itemId },
+        data: { isDone }
+    });
+    res.json({ success: true, data: item });
 });
 
 // ── POST /api/tasks/:id/activities ──

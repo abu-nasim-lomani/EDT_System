@@ -26,6 +26,7 @@ interface Task {
     progress?: number;
     fileUrl?: string;
     subTasks?: Task[];
+    parentTaskId?: string | null;
 }
 interface ProjectOpt { id: string; name: string; }
 interface UserOpt { id: string; name: string; avatar?: string; }
@@ -63,14 +64,16 @@ export default function TasksPage() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
     });
 
-    const filtered = tasks.filter(t => {
+    const mainTasks = tasks.filter(t => !t.parentTaskId);
+
+    const filtered = mainTasks.filter(t => {
         const matchStatus = filterStatus === "ALL" || t.status === filterStatus;
         const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) ||
             t.project.name.toLowerCase().includes(search.toLowerCase());
         return matchStatus && matchSearch;
     });
 
-    const activeCount = tasks.filter(t => t.status !== "COMPLETED").length;
+    const activeCount = mainTasks.filter(t => t.status !== "COMPLETED").length;
 
     if (isLoading) return (
         <div className="flex flex-col items-center justify-center py-32 gap-3 text-slate-500">
@@ -95,7 +98,7 @@ export default function TasksPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-white">Tasks</h1>
-                    <p className="text-sm text-slate-500 mt-0.5">{activeCount} active · {tasks.length} total tasks</p>
+                    <p className="text-sm text-slate-500 mt-0.5">{activeCount} active · {mainTasks.length} total tasks</p>
                 </div>
                 {user?.role !== "EMPLOYEE" && (
                     <button onClick={() => setModal({ mode: "create" })}
@@ -194,7 +197,7 @@ function TaskRow({ task, onEdit, onDelete, canEdit, onStatusChange, onProgressCh
     const progressPercent = task.progress || 0;
 
     const startEditingProgress = () => {
-        if (!canEdit) return;
+        if (!canEdit || task.subTasks?.length) return;
         setTempProgress(progressPercent.toString());
         setIsEditingProgress(true);
     };
@@ -219,9 +222,16 @@ function TaskRow({ task, onEdit, onDelete, canEdit, onStatusChange, onProgressCh
         <tr className={`group hover:bg-slate-800/30 transition-colors ${isDone ? "opacity-60" : ""}`}>
             {/* Title */}
             <td className="px-4 py-4 align-middle">
-                <button onClick={() => router.push(`/dashboard/tasks/${task.id}`)} className={`text-sm font-bold text-left leading-tight hover:text-indigo-400 transition-colors ${isDone ? "text-slate-500 line-through decoration-slate-600" : "text-slate-100"}`}>
-                    {task.title}
-                </button>
+                <div className="flex items-center gap-2">
+                    {task.parentTaskId && (
+                        <span className="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0" title="This is a sub-task belonging to a main task">
+                            Sub-Task
+                        </span>
+                    )}
+                    <button onClick={() => router.push(`/dashboard/tasks/${task.id}`)} className={`text-sm font-bold text-left leading-tight hover:text-indigo-400 transition-colors ${isDone ? "text-slate-500 line-through decoration-slate-600" : "text-slate-100"}`}>
+                        {task.title}
+                    </button>
+                </div>
             </td>
 
             {/* Start Date */}
@@ -326,12 +336,12 @@ function TaskRow({ task, onEdit, onDelete, canEdit, onStatusChange, onProgressCh
                     </div>
                 )}
 
-                <div className="flex flex-col w-[120px] group/progress" onClick={!isEditingProgress ? startEditingProgress : undefined}>
+                <div className={`flex flex-col w-[120px] ${task.subTasks?.length ? 'opacity-90' : 'group/progress'}`} onClick={(!isEditingProgress && !task.subTasks?.length) ? startEditingProgress : undefined}>
                     {!isEditingProgress ? (
-                        <div className="flex flex-col gap-1.5 cursor-pointer" title={canEdit ? "Click to edit progress" : ""}>
+                        <div className={`flex flex-col gap-1.5 ${(canEdit && !task.subTasks?.length) ? 'cursor-pointer' : ''}`} title={canEdit && !task.subTasks?.length ? "Click to edit progress" : task.subTasks?.length ? "Auto-calculated from sub-tasks" : ""}>
                             <div className="flex justify-between items-center text-xs font-bold text-slate-300">
                                 <span>{progressPercent}%</span>
-                                {canEdit && <span className="text-[9px] text-indigo-400 uppercase tracking-wide opacity-0 group-hover/progress:opacity-100 transition-opacity">Click to edit</span>}
+                                {canEdit && !task.subTasks?.length && <span className="text-[9px] text-indigo-400 uppercase tracking-wide opacity-0 group-hover/progress:opacity-100 transition-opacity">Click to edit</span>}
                             </div>
                             <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full transition-all duration-500 ${isDone ? "bg-emerald-500" : "bg-indigo-500"}`} style={{ width: `${progressPercent}%` }} />
