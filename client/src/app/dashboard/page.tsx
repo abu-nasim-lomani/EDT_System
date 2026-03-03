@@ -73,10 +73,10 @@ export default function DashboardPage() {
 
                 {/* Left: Project Progress – 2 cols */}
                 <div className="xl:col-span-2 edt-card overflow-hidden">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-theme">
                         <div>
-                            <h3 className="text-sm font-semibold text-white">Project Progress</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">All ongoing projects at a glance</p>
+                            <h3 className="text-sm font-semibold text-theme-primary">Project Progress</h3>
+                            <p className="text-xs text-theme-muted mt-0.5">All ongoing projects at a glance</p>
                         </div>
                         <button className="flex items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
                             View all <ArrowRight className="h-3.5 w-3.5" />
@@ -84,7 +84,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Table header */}
-                    <div className="grid grid-cols-12 px-6 py-3 text-[11px] font-semibold uppercase tracking-widest text-slate-600 border-b border-slate-800">
+                    <div className="grid grid-cols-12 px-6 py-3 text-[11px] font-semibold uppercase tracking-widest text-theme-muted border-b border-theme">
                         <span className="col-span-4">Project</span>
                         <span className="col-span-2">Status</span>
                         <span className="col-span-3">Progress</span>
@@ -92,7 +92,7 @@ export default function DashboardPage() {
                         <span className="col-span-1 text-right">Due</span>
                     </div>
 
-                    <div className="divide-y divide-slate-800">
+                    <div className="divide-y divide-theme">
                         <ProjectRow name="Web App Revamp" status="In Progress" progress={78} pm="A. Smith" due="Apr 10" />
                         <ProjectRow name="Q3 Marketing Campaign" status="Pending" progress={0} pm="B. Jones" due="May 15" />
                         <ProjectRow name="Infrastructure Migration" status="Stuck" progress={45} pm="C. Brown" due="Mar 28" />
@@ -102,14 +102,14 @@ export default function DashboardPage() {
 
                 {/* Right: Today's Timeline */}
                 <div className="edt-card overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-theme">
                         <div>
-                            <h3 className="text-sm font-semibold text-white">Today&apos;s Schedule</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Mon, Mar 2 · 2026</p>
+                            <h3 className="text-sm font-semibold text-theme-primary">Today&apos;s Schedule</h3>
+                            <p className="text-xs text-theme-muted mt-0.5">Mon, Mar 2 · 2026</p>
                         </div>
-                        <CalendarDays className="h-4 w-4 text-slate-600" />
+                        <CalendarDays className="h-4 w-4 text-theme-muted" />
                     </div>
-                    <div className="divide-y divide-slate-800">
+                    <div className="divide-y divide-theme">
                         <TimelineItem time="10:00 AM" title="Weekly ARR Sync" type="meeting" project="Web App Revamp" />
                         <TimelineItem time="01:00 PM" title="UI Design Review" type="task" project="Mobile App V2" />
                         <TimelineItem time="03:30 PM" title="Client Stakeholder Call" type="event" project="Q3 Marketing" />
@@ -143,8 +143,8 @@ function MetricCard({ title, value, trend, trendUp, icon: Icon, iconClass, accen
                 </span>
             </div>
             <div>
-                <div className="text-3xl font-bold tracking-tight text-white">{value}</div>
-                <div className="text-xs text-slate-500 mt-1 font-medium">{title}</div>
+                <div className="text-3xl font-bold tracking-tight text-theme-primary">{value}</div>
+                <div className="text-xs text-theme-muted mt-1 font-medium">{title}</div>
                 <div className={`text-xs mt-1 ${trendUp ? "text-emerald-400" : "text-rose-400"}`}>{trend}</div>
             </div>
         </div>
@@ -160,9 +160,9 @@ function ProjectRow({ name, status, progress, pm, due }: ProjectRowProps) {
     };
 
     return (
-        <div className="grid grid-cols-12 items-center px-6 py-4 hover:bg-slate-800/30 transition-colors">
+        <div className="grid grid-cols-12 items-center px-6 py-4 hover:bg-theme-element/30 transition-colors">
             <div className="col-span-4">
-                <p className="text-sm font-medium text-white">{name}</p>
+                <p className="text-sm font-medium text-theme-primary">{name}</p>
             </div>
             <div className="col-span-2">
                 <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusMap[status]}`}>
@@ -173,13 +173,13 @@ function ProjectRow({ name, status, progress, pm, due }: ProjectRowProps) {
                 <div className="edt-progress-track flex-1 h-1.5">
                     <div className="edt-progress-fill h-full" style={{ width: `${progress}%` }} />
                 </div>
-                <span className="text-xs font-semibold text-slate-400">{progress}%</span>
+                <span className="text-xs font-semibold text-theme-muted">{progress}%</span>
             </div>
             <div className="col-span-2">
-                <span className="text-xs text-slate-400">{pm}</span>
+                <span className="text-xs text-theme-muted">{pm}</span>
             </div>
             <div className="col-span-1 text-right">
-                <span className="text-xs text-slate-500">{due}</span>
+                <span className="text-xs text-theme-muted">{due}</span>
             </div>
         </div>
     );
@@ -188,15 +188,15 @@ function ProjectRow({ name, status, progress, pm, due }: ProjectRowProps) {
 function TimelineItem({ time, title, type, project }: TimelineItemProps) {
     const typeColor = { meeting: "bg-blue-500", task: "bg-amber-500", event: "bg-indigo-500" }[type];
     return (
-        <div className="flex gap-4 px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
+        <div className="flex gap-4 px-5 py-3.5 hover:bg-theme-element/30 transition-colors">
             <div className="flex flex-col items-center gap-1 pt-1">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${typeColor}`} />
-                <div className="w-px flex-1 bg-slate-800" />
+                <div className="w-px flex-1 border-l border-theme" />
             </div>
             <div className="pb-1 min-w-0 flex-1">
-                <p className="text-sm font-medium text-white leading-snug">{title}</p>
-                {project && <p className="text-xs text-slate-500 mt-0.5">{project}</p>}
-                <p className="text-[11px] text-slate-600 mt-1 font-medium">{time}</p>
+                <p className="text-sm font-medium text-theme-primary leading-snug">{title}</p>
+                {project && <p className="text-xs text-theme-muted mt-0.5">{project}</p>}
+                <p className="text-[11px] text-theme-muted mt-1 font-medium">{time}</p>
             </div>
         </div>
     );
@@ -212,12 +212,12 @@ interface QuickStatProps {
 function QuickStat({ label, value, icon: Icon, color }: QuickStatProps) {
     return (
         <div className="edt-card flex items-center gap-4 px-5 py-4">
-            <div className="bg-slate-800 p-2.5 rounded-xl">
+            <div className="bg-theme-element p-2.5 rounded-xl border border-theme">
                 <Icon className={`h-5 w-5 ${color}`} />
             </div>
             <div>
-                <div className="text-2xl font-bold text-white">{value}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+                <div className="text-2xl font-bold text-theme-primary">{value}</div>
+                <div className="text-xs text-theme-muted mt-0.5">{label}</div>
             </div>
         </div>
     );

@@ -132,7 +132,7 @@ export function MessageBell() {
                 className={`relative w-8 h-8 flex items-center justify-center rounded-xl border transition-all
                     ${open
                         ? "bg-indigo-600 border-indigo-500 text-white"
-                        : "bg-slate-800/80 border-slate-700/60 text-slate-400 hover:border-indigo-500/50 hover:text-white"
+                        : "bg-theme-element border-theme text-theme-muted hover:border-indigo-500/50 hover:text-indigo-400"
                     }`}
                 title="Messages"
             >
@@ -146,12 +146,12 @@ export function MessageBell() {
 
             {/* Dropdown panel */}
             {open && (
-                <div className="absolute right-0 top-10 w-80 rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-10 w-80 rounded-2xl border border-theme bg-theme-card shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-theme">
                         <div className="flex items-center gap-2">
-                            <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
-                            <span className="text-sm font-semibold text-white">Messages</span>
+                            <MessageSquare className="h-3.5 w-3.5 text-theme-muted" />
+                            <span className="text-sm font-semibold text-theme-primary">Messages</span>
                             {unreadCount > 0 && (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">
                                     {unreadCount} new
@@ -162,14 +162,14 @@ export function MessageBell() {
                             {unreadCount > 0 && (
                                 <button
                                     onClick={() => markAllRead.mutate()}
-                                    className="text-[10px] font-medium text-indigo-400 hover:text-indigo-300 px-1.5 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                                    className="text-[10px] font-medium text-indigo-400 hover:text-indigo-300 px-1.5 py-1 rounded-lg hover:bg-theme-element transition-colors"
                                 >
                                     Mark all read
                                 </button>
                             )}
                             <button
                                 onClick={() => { setOpen(false); router.push("/dashboard/messages"); }}
-                                className="text-[10px] text-slate-400 hover:text-white px-1.5 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                                className="text-[10px] text-theme-muted hover:text-theme-primary px-1.5 py-1 rounded-lg hover:bg-theme-element transition-colors"
                             >
                                 Open all
                             </button>
@@ -179,7 +179,7 @@ export function MessageBell() {
                     {/* List */}
                     <div className="max-h-[320px] overflow-y-auto">
                         {notifications.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                            <div className="flex flex-col items-center justify-center py-10 text-theme-muted gap-2">
                                 <MessageSquare className="h-6 w-6 opacity-30" />
                                 <p className="text-xs">No message notifications</p>
                             </div>
@@ -188,7 +188,7 @@ export function MessageBell() {
                                 <button
                                     key={n.id}
                                     onClick={() => handleClick(n)}
-                                    className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-800/60 border-b border-slate-800/50 last:border-0
+                                    className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-theme-element border-b border-theme last:border-0
                                         ${!n.isRead ? "bg-indigo-500/5" : ""}`}
                                 >
                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -196,11 +196,11 @@ export function MessageBell() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-1">
-                                            <p className="text-xs font-semibold text-white leading-snug">{n.title}</p>
+                                            <p className="text-xs font-semibold text-theme-primary leading-snug">{n.title}</p>
                                             {!n.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-1" />}
                                         </div>
-                                        <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
-                                        <p className="text-[10px] text-slate-600 mt-1">{timeAgo(n.createdAt)}</p>
+                                        <p className="text-[11px] text-theme-muted mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
+                                        <p className="text-[10px] text-theme-muted mt-1">{timeAgo(n.createdAt)}</p>
                                     </div>
                                 </button>
                             ))
