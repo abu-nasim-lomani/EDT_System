@@ -1,0 +1,1 @@
+{"version":3,"file":"prisma.d.ts","sourceRoot":"","sources":["../../src/utils/prisma.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,YAAY,EAAE,MAAM,gBAAgB,CAAC;AAS9C,OAAO,CAAC,MAAM,CAAC;IAEX,IAAI,YAAY,EAAE,YAAY,GAAG,SAAS,CAAC;CAC9C;AAED,eAAO,MAAM,MAAM,EAAE,YAAiE,CAAC"}

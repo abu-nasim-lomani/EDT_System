@@ -9,6 +9,7 @@ import { usersRouter } from "./routes/users.routes";
 import { rescheduleRouter } from "./routes/reschedule.routes";
 import { notificationRouter } from "./routes/notification.routes";
 import { conversationRouter } from "./routes/conversation.routes";
+import { aiRouter } from "./routes/ai.routes";
 
 export const createApp = () => {
     const app = express();
@@ -35,6 +36,7 @@ export const createApp = () => {
     app.use("/api/notifications", notificationRouter);
     app.use("/api/dashboard", dashboardRouter);
     app.use("/api/conversations", conversationRouter);
+    app.use("/api/ai", aiRouter);
 
     // Global error handler
     app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

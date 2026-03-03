@@ -1,5 +1,6 @@
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { QueryProvider } from "@/providers/QueryProvider"
+import { ThemeProvider } from "@/components/shared/ThemeProvider"
 import type { Metadata } from "next"
 import "./globals.css"
 
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased selection:bg-indigo-500 selection:text-white">
         <QueryProvider>
-          <TooltipProvider>{children}</TooltipProvider>
+          <ThemeProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+          </ThemeProvider>
         </QueryProvider>
       </body>
     </html>

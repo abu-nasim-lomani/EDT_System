@@ -84,10 +84,10 @@ function KpiCard({ title, value, sub, icon: Icon, accent, pulse }:
                 <Icon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-                <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wide">{title}</p>
+                <p className="text-[11px] text-theme-muted font-medium uppercase tracking-wide">{title}</p>
                 <div className="flex items-baseline gap-2">
-                    <span className={`text-2xl font-bold text-white ${pulse && value > 0 ? "text-rose-400" : ""}`}>{value}</span>
-                    <span className="text-[11px] text-slate-500">{sub}</span>
+                    <span className={`text-2xl font-bold text-theme-primary ${pulse && value > 0 ? "text-rose-400" : ""}`}>{value}</span>
+                    <span className="text-[11px] text-theme-muted">{sub}</span>
                 </div>
             </div>
         </div>
@@ -99,7 +99,7 @@ function ProjectCard({ p }: { p: PMProject }) {
     const statusCls = STATUS_COLOR[p.status] ?? STATUS_COLOR.PENDING;
     return (
         <Link href={`/dashboard/projects/${p.id}`}
-            className="group flex items-center gap-4 p-4 rounded-xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/40 transition-all">
+            className="group flex items-center gap-4 p-4 rounded-xl border border-theme hover:border-indigo-500/40 bg-theme-element/30 hover:bg-theme-element transition-all">
             {/* Progress ring */}
             <div className="relative w-10 h-10 shrink-0">
                 <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
@@ -112,7 +112,7 @@ function ProjectCard({ p }: { p: PMProject }) {
                 </span>
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate group-hover:text-indigo-300 transition-colors">{p.name}</p>
+                <p className="text-sm font-semibold text-theme-primary truncate group-hover:text-indigo-400 transition-colors">{p.name}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${statusCls}`}>
                         {p.status.replace("_", " ")}
@@ -142,13 +142,13 @@ function TaskRow({ t }: { t: PMTask }) {
     const daysStr = daysLeft(t.endDate);
     return (
         <Link href={`/dashboard/tasks/${t.id}`}
-            className="group flex items-start gap-3 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/30 transition-all">
+            className="group flex items-start gap-3 p-3.5 rounded-xl border border-theme hover:border-indigo-500/40 hover:bg-theme-element transition-all">
             {/* Priority dot */}
             <div className="mt-1 shrink-0 flex flex-col items-center gap-1">
                 <span className={`w-2 h-2 rounded-full ${pri.dot}`} title={pri.label} />
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-200 truncate group-hover:text-white">{t.title}</p>
+                <p className="text-sm font-medium text-theme-primary truncate">{t.title}</p>
                 <div className="flex items-center gap-3 mt-1 flex-wrap">
                     {t.project && (
                         <span className="text-[10px] text-indigo-400 truncate max-w-[120px]">{t.project.name}</span>
@@ -187,7 +187,7 @@ function TaskRow({ t }: { t: PMTask }) {
 function EventRow({ e, variant }: { e: PMEvent; variant: "upcoming" | "pending" | "declined" }) {
     return (
         <Link href={`/dashboard/events`}
-            className="group flex items-center gap-3 p-3.5 rounded-xl border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-800/30 transition-all">
+            className="group flex items-center gap-3 p-3.5 rounded-xl border border-theme hover:border-indigo-500/40 hover:bg-theme-element transition-all">
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0
                 ${variant === "upcoming" ? "bg-blue-500/10 text-blue-400" :
                     variant === "pending" ? "bg-amber-500/10 text-amber-400" :
@@ -197,7 +197,7 @@ function EventRow({ e, variant }: { e: PMEvent; variant: "upcoming" | "pending" 
                         <CalendarX className="h-4 w-4" />}
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-200 truncate group-hover:text-white">{e.title}</p>
+                <p className="text-sm font-medium text-theme-primary truncate">{e.title}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-slate-500">{fmtDate(e.startDate)} · {fmtTime(e.startDate)}</span>
                     {e.project && <span className="text-[10px] text-indigo-400 truncate">{e.project.name}</span>}
@@ -241,10 +241,10 @@ function QuickCreate() {
 // ── Section Header ────────────────────────────────────────────────────────────
 function SectionHeader({ title, sub, href }: { title: string; sub?: string; href?: string }) {
     return (
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-theme">
             <div>
-                <h3 className="text-sm font-semibold text-white">{title}</h3>
-                {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+                <h3 className="text-sm font-semibold text-theme-primary">{title}</h3>
+                {sub && <p className="text-xs text-theme-muted mt-0.5">{sub}</p>}
             </div>
             {href && (
                 <Link href={href} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
@@ -260,7 +260,7 @@ function FilterTab({ label, active, onClick }: { label: string; active: boolean;
     return (
         <button onClick={onClick}
             className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-all
-                ${active ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"}`}>
+                ${active ? "bg-indigo-600 text-white" : "text-theme-muted hover:text-theme-primary hover:bg-theme-element"}`}>
             {label}
         </button>
     );
@@ -373,8 +373,8 @@ export function ProjectManagerDashboard() {
                                 <button key={tab.key} onClick={() => setEventTab(tab.key)}
                                     className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all border-b-2
                                         ${eventTab === tab.key
-                                            ? "text-indigo-400 border-indigo-500"
-                                            : "text-slate-500 border-transparent hover:text-white"}`}>
+                                            ? "text-indigo-500 border-indigo-500"
+                                            : "text-theme-muted border-transparent hover:text-theme-primary"}`}>
                                     <tab.icon className="h-3.5 w-3.5" />
                                     {tab.label}
                                     {count > 0 && (
