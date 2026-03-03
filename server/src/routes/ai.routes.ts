@@ -15,6 +15,27 @@ const ChatSchema = z.object({
     message: z.string().min(1),
 });
 
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+    {
+        type: "function",
+        function: {
+            name: "create_event",
+            description: "Creates a new event (e.g. meeting, training, review). Use this when the user asks to schedule or create an event.",
+            parameters: {
+                type: "object",
+                properties: {
+                    title: { type: "string", description: "Title of the event" },
+                    description: { type: "string", description: "Optional description of the event" },
+                    type: { type: "string", enum: ["MEETING", "TRAINING", "REVIEW", "PRESENTATION", "WEBINAR", "OTHER"] },
+                    startDate: { type: "string", description: "ISO 8601 formatted start date and time. If the user says 'tomorrow at 10 AM', calculate the correct ISO timestamp based on the current date." },
+                    endDate: { type: "string", description: "ISO 8601 formatted end date and time. Default to 1 hour after startDate if not specified." }
+                },
+                required: ["title", "type", "startDate", "endDate"],
+            }
+        }
+    }
+];
+
 // ── POST /api/ai/chat ──
 // Queries the database based on the user's role and sends it to OpenAI to answer the user's message.
 aiRouter.post("/chat", async (req: AuthRequest, res: Response): Promise<void> => {
@@ -85,21 +106,70 @@ aiRouter.post("/chat", async (req: AuthRequest, res: Response): Promise<void> =>
 
         // Construct the prompt for OpenAI
         const systemPrompt = `You are a helpful AI assistant integrated into the EDT System (a project management portal).
-The user interacting with you is logged in as a ${userRole}.
+The user interacting with you is logged in as a ${userRole}. The current date and time is: ${new Date().toISOString()}.
 Here is the real-time context data fetched from the database relevant to them:
 ${JSON.stringify(contextData, null, 2)}
 
-Answer the user's questions accurately based ONLY on the provided context data. If you don't know the answer or the context data doesn't contain it, politely say so. Do not invent tracking numbers, project names, or events that are not in the context. Keep your response concise, professional, and well-formatted in markdown. Try to be extremely helpful.`;
+Answer the user's questions accurately based ONLY on the provided context data. If you don't know the answer or the context data doesn't contain it, politely say so. Do not invent tracking numbers, project names, or events that are not in the context. Keep your response concise, professional, and well-formatted in markdown. Try to be extremely helpful.
+If you use a tool to create an event, always respond back clearly to confirm to the user that it was created.`;
 
-        const completion = await openai.chat.completions.create({
+        const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+        ];
+
+        let completion = await openai.chat.completions.create({
             model: "gpt-4o-mini", // Assuming we use gpt-4o-mini for cost efficiency, can be changed.
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: message },
-            ],
+            messages,
+            tools: tools,
+            tool_choice: "auto",
             temperature: 0.3,
             max_tokens: 500,
         });
+
+        const responseMessage = completion.choices[0].message;
+
+        // If the AI decided to call a function
+        if (responseMessage.tool_calls) {
+            messages.push(responseMessage); // Add the assistant's tool call to history
+
+            for (const toolCall of responseMessage.tool_calls) {
+                if (toolCall.type === "function" && toolCall.function.name === "create_event") {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    try {
+                        const newEvent = await prisma.event.create({
+                            data: {
+                                title: args.title,
+                                description: args.description,
+                                type: args.type,
+                                startDate: new Date(args.startDate),
+                                endDate: new Date(args.endDate),
+                                creatorId: userId,
+                            }
+                        });
+                        messages.push({
+                            role: "tool",
+                            tool_call_id: toolCall.id,
+                            content: `Event "${newEvent.title}" was created successfully with ID ${newEvent.id}.`
+                        });
+                    } catch (err: any) {
+                        messages.push({
+                            role: "tool",
+                            tool_call_id: toolCall.id,
+                            content: `Failed to create event: ${err.message}`
+                        });
+                    }
+                }
+            }
+
+            // Get a new response from the model where it formulates the final answer
+            completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages,
+                temperature: 0.3,
+                max_tokens: 500,
+            });
+        }
 
         const aiResponse = completion.choices[0]?.message?.content || "I'm sorry, I couldn't process your request at this time.";
 
