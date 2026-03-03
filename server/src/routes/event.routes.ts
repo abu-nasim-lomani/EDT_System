@@ -168,7 +168,7 @@ eventRouter.get("/:id", async (req: AuthRequest, res: Response): Promise<void> =
 // ── GET /api/events/:id/decisions ──
 eventRouter.get("/:id/decisions", async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const eventId = req.params.id;
+        const eventId = req.params.id as string;
         const decisions = await prisma.decision.findMany({
             where: { eventId },
             include: {
@@ -187,7 +187,7 @@ eventRouter.get("/:id/decisions", async (req: AuthRequest, res: Response): Promi
 // ── POST /api/events/:id/decisions ──
 eventRouter.post("/:id/decisions", async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        const eventId = req.params.id;
+        const eventId = req.params.id as string;
         const { summary } = req.body as { summary: string };
         if (!summary?.trim()) {
             res.status(400).json({ success: false, message: "Summary is required" });
