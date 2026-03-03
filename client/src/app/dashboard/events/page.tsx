@@ -1,74 +1,120 @@
 "use client";
-import { useState } from "react";
-import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MapPin, MoreHorizontal, CheckCircle2, XCircle } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Trash, CheckCircle, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
+import { QueryClient, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 // ---- Types ----
-type EventType = "meeting" | "workshop" | "seminar" | "training";
-type EventStatus = "scheduled" | "completed" | "cancelled";
-type InviteStatus = "accepted" | "pending" | "declined";
+type EventStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+type InviteStatus = "ACCEPTED" | "PENDING" | "DECLINED";
 
-interface CalendarEvent {
-    id: string;
-    title: string;
-    project: string;
-    type: EventType;
-    status: EventStatus;
-    date: string;    // "YYYY-MM-DD"
-    time: string;    // "HH:MM"
-    endTime: string;
-    participants: number;
-    myStatus: InviteStatus;
-    hasConflict?: boolean;
+interface ApiEvent {
+    id: string; title: string; agenda?: string; status: EventStatus;
+    startDate: string; endDate: string; hasConflict?: boolean;
+    project?: { id: string; name: string };
+    participants: { userId: string; status: InviteStatus }[];
+    creator: { id: string; name: string; avatar?: string };
 }
-
-// ---- Mock data ----
-const EVENTS: CalendarEvent[] = [
-    { id: "1", title: "Weekly ARR Sync", project: "Web App Revamp", type: "meeting", status: "scheduled", date: "2026-03-02", time: "10:00", endTime: "11:00", participants: 5, myStatus: "accepted", hasConflict: true },
-    { id: "2", title: "Infrastructure Review", project: "Infra Migration", type: "meeting", status: "scheduled", date: "2026-03-02", time: "10:30", endTime: "11:30", participants: 4, myStatus: "pending", hasConflict: true },
-    { id: "3", title: "Design Workshop", project: "Mobile App V2", type: "workshop", status: "scheduled", date: "2026-03-04", time: "09:00", endTime: "12:00", participants: 8, myStatus: "accepted" },
-    { id: "4", title: "Client Stakeholder Call", project: "Q3 Marketing", type: "meeting", status: "scheduled", date: "2026-03-05", time: "14:00", endTime: "15:00", participants: 6, myStatus: "pending" },
-    { id: "5", title: "Data Privacy Training", project: "Compliance", type: "training", status: "scheduled", date: "2026-03-07", time: "11:00", endTime: "13:00", participants: 20, myStatus: "accepted" },
-    { id: "6", title: "Board Seminar – Strategy", project: "N/A", type: "seminar", status: "completed", date: "2026-02-25", time: "09:00", endTime: "17:00", participants: 30, myStatus: "accepted" },
-];
 
 // ---- Helpers ----
-const TYPE_COLORS: Record<EventType, string> = {
-    meeting: "bg-blue-500/20  text-blue-400  border border-blue-500/30",
-    workshop: "bg-violet-500/20 text-violet-400 border border-violet-500/30",
-    seminar: "bg-amber-500/20 text-amber-400  border border-amber-500/30",
-    training: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
-};
-const TYPE_DOT: Record<EventType, string> = {
-    meeting: "bg-blue-500", workshop: "bg-violet-500", seminar: "bg-amber-500", training: "bg-emerald-500",
-};
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function getDaysInMonth(year: number, month: number) {
-    return new Date(year, month + 1, 0).getDate();
-}
-function getFirstDayOfMonth(year: number, month: number) {
-    return new Date(year, month, 1).getDay();
-}
+function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
+function getFirstDayOfMonth(year: number, month: number) { return new Date(year, month, 1).getDay(); }
 
 // ---- Main Component ----
 export default function EventsPage() {
-    const [year, setYear] = useState(2026);
-    const [month, setMonth] = useState(2); // March
-    const [selected, setSelected] = useState<string | null>("2026-03-02");
-    const [activeTab, setActiveTab] = useState<"all" | "mine" | "pending">("all");
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading events...</div>}>
+            <EventsPageContent />
+        </Suspense>
+    );
+}
+
+function EventsPageContent() {
+    const user = useAuthStore(s => s.user);
+    const qc = useQueryClient();
+    const searchParams = useSearchParams();
+    const router = useRouter();
+
+    const [year, setYear] = useState(new Date().getFullYear());
+    const [month, setMonth] = useState(new Date().getMonth());
+    const [selected, setSelected] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"all" | "pending" | "archive">("all");
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+    // Modal states
+    const [rescheduleEvent, setRescheduleEvent] = useState<(ApiEvent & { date: string; time: string; endTime: string; myStatus: string; isCreator: boolean }) | null>(null);
+    const [requestRescheduleEvent, setRequestRescheduleEvent] = useState<(ApiEvent & { date: string; time: string; endTime: string; myStatus: string; isCreator: boolean }) | null>(null);
+    const [reviewRequestId, setReviewRequestId] = useState<string | null>(searchParams.get("reviewRequest"));
+
+    // Sync query param -> state (for when nav link clicked while already on page)
+    useEffect(() => {
+        const reqId = searchParams.get("reviewRequest");
+        if (reqId) setReviewRequestId(reqId);
+    }, [searchParams]);
+
+    const closeReviewModal = () => {
+        setReviewRequestId(null);
+        if (searchParams.has("reviewRequest")) {
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete("reviewRequest");
+            router.replace(newUrl.pathname + newUrl.search);
+        }
+    };
+
+    // -- Queries --
+    const { data: events = [] } = useQuery({ queryKey: ["events"], queryFn: async () => (await api.get("/events")).data.data as ApiEvent[] });
+    const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: async () => (await api.get("/projects")).data.data as { id: string; name: string }[] });
+    const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: async () => (await api.get("/users")).data.data as { id: string; name: string; avatar?: string }[] });
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfMonth(year, month);
-    const today = `${year}-${String(month + 1).padStart(2, "0")}`;
 
-    const eventsForDate = (dateStr: string) =>
-        EVENTS.filter((e) => e.date === dateStr);
+    const formattedEvents = events.map(e => {
+        const d = new Date(e.startDate);
+        const ed = new Date(e.endDate);
+        const myPart = e.participants.find(p => p.userId === user?.id);
+        return {
+            ...e,
+            date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+            time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+            endTime: ed.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+            myStatus: myPart?.status || "ACCEPTED", // Creators might not be in participants array explicitly with a status
+            isCreator: e.creator.id === user?.id
+        };
+    });
 
-    const filteredEvents = EVENTS.filter((e) => {
-        if (activeTab === "pending") return e.myStatus === "pending";
-        if (activeTab === "mine") return e.myStatus !== "declined";
-        return true;
+    // ── Client-side Conflict Detection ──
+    // Mark any two events as conflicting if the current user has ACCEPTED both
+    // and their time ranges overlap.
+    const acceptedEvents = formattedEvents.filter(e => e.myStatus === "ACCEPTED" && e.status !== "COMPLETED");
+    for (let i = 0; i < acceptedEvents.length; i++) {
+        for (let j = i + 1; j < acceptedEvents.length; j++) {
+            const a = acceptedEvents[i];
+            const b = acceptedEvents[j];
+            const aStart = new Date(a.startDate).getTime();
+            const aEnd = new Date(a.endDate).getTime();
+            const bStart = new Date(b.startDate).getTime();
+            const bEnd = new Date(b.endDate).getTime();
+            if (aStart < bEnd && aEnd > bStart) {
+                a.hasConflict = true;
+                b.hasConflict = true;
+            }
+        }
+    }
+
+    const eventsForDate = (dateStr: string) => formattedEvents.filter((e) => e.date === dateStr);
+
+    const filteredEvents = formattedEvents.filter((e) => {
+        if (activeTab === "pending") return e.myStatus === "PENDING";
+        if (activeTab === "archive") return e.status === "COMPLETED";
+        return true; // all
     });
 
     const selectedEvents = selected
@@ -90,7 +136,7 @@ export default function EventsPage() {
                     <h1 className="text-3xl font-bold tracking-tight text-white">Events</h1>
                     <p className="text-sm text-slate-500 mt-1">Schedule and track meetings, workshops, seminars & trainings.</p>
                 </div>
-                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shrink-0">
+                <Button onClick={() => setIsCreateModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shrink-0">
                     <Plus className="h-4 w-4 mr-2" /> New Event
                 </Button>
             </div>
@@ -143,7 +189,7 @@ export default function EventsPage() {
                                         {dayEvts.length > 0 && !isSelected && (
                                             <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5`}>
                                                 {dayEvts.slice(0, 3).map((e, idx) => (
-                                                    <span key={idx} className={`w-1 h-1 rounded-full ${hasConflict && e.hasConflict ? "bg-rose-500" : TYPE_DOT[e.type]}`} />
+                                                    <span key={idx} className={`w-1 h-1 rounded-full ${hasConflict && e.hasConflict ? "bg-rose-500" : "bg-indigo-400"}`} />
                                                 ))}
                                             </span>
                                         )}
@@ -155,11 +201,9 @@ export default function EventsPage() {
 
                     {/* Legend */}
                     <div className="px-5 pb-4 pt-2 border-t border-slate-800 flex flex-wrap gap-3">
-                        {(Object.entries(TYPE_DOT) as [EventType, string][]).map(([type, dot]) => (
-                            <div key={type} className="flex items-center gap-1.5 text-[11px] text-slate-500 capitalize">
-                                <span className={`w-2 h-2 rounded-full ${dot}`} /> {type}
-                            </div>
-                        ))}
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 capitalize">
+                            <span className="w-2 h-2 rounded-full bg-indigo-400" /> Event
+                        </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-rose-400">
                             <span className="w-2 h-2 rounded-full bg-rose-500" /> Conflict
                         </div>
@@ -167,7 +211,7 @@ export default function EventsPage() {
                 </div>
 
                 {/* ── Event List ── */}
-                <div className="xl:col-span-2 edt-card overflow-hidden flex flex-col">
+                <div className="xl:col-span-2 edt-card overflow-hidden flex flex-col h-[385px] xl:h-[385px]">
                     {/* Filters */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 gap-4">
                         <div>
@@ -177,17 +221,16 @@ export default function EventsPage() {
                             <p className="text-xs text-slate-500 mt-0.5">{selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""}</p>
                         </div>
                         <div className="flex gap-1 bg-slate-900/80 rounded-xl p-1">
-                            {(["all", "mine", "pending"] as const).map((tab) => (
+                            {(["all", "pending", "archive"] as const).map((tab) => (
                                 <button key={tab} onClick={() => setActiveTab(tab)}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all
                     ${activeTab === tab ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-white"}`}>
-                                    {tab}
+                                    {tab === "archive" ? "Archive" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Events */}
                     <div className="flex-1 overflow-y-auto divide-y divide-slate-800">
                         {selectedEvents.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-slate-600">
@@ -195,28 +238,523 @@ export default function EventsPage() {
                                 <p className="text-sm font-medium">No events found</p>
                             </div>
                         ) : (
-                            selectedEvents.map((evt) => <EventRow key={evt.id} event={evt} />)
+                            selectedEvents.map((evt) => <EventRow key={evt.id} event={evt} qc={qc} onReschedule={setRescheduleEvent} onRequestReschedule={setRequestRescheduleEvent} />)
                         )}
                     </div>
+                </div>
+            </div>
+
+            {isCreateModalOpen && (
+                <CreateEventModal
+                    users={users} projects={projects}
+                    onClose={() => setIsCreateModalOpen(false)}
+                    onSuccess={() => { qc.invalidateQueries({ queryKey: ["events"] }); setIsCreateModalOpen(false); }}
+                />
+            )}
+
+            {rescheduleEvent && (
+                <RescheduleModal
+                    event={rescheduleEvent}
+                    projects={projects}
+                    onClose={() => setRescheduleEvent(null)}
+                    onSuccess={() => { qc.invalidateQueries({ queryKey: ["events"] }); setRescheduleEvent(null); }}
+                />
+            )}
+
+            {requestRescheduleEvent && (
+                <RequestRescheduleModal
+                    event={requestRescheduleEvent}
+                    onClose={() => setRequestRescheduleEvent(null)}
+                    onSuccess={() => setRequestRescheduleEvent(null)}
+                />
+            )}
+
+            {reviewRequestId && (
+                <ReviewRescheduleModal
+                    requestId={reviewRequestId}
+                    onClose={closeReviewModal}
+                    onSuccess={() => { qc.invalidateQueries({ queryKey: ["events"] }); closeReviewModal(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+// ── Sub-components ──
+function RescheduleModal({ event, projects, onClose, onSuccess }: {
+    event: ApiEvent & { date: string; time: string; endTime: string };
+    projects: { id: string; name: string }[];
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    // Derive initial date/time from existing event
+    const startDt = new Date(event.startDate);
+    const endDt = new Date(event.endDate);
+    const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+    const [form, setForm] = useState({
+        title: event.title,
+        description: (event as { description?: string }).description || "",
+        startDate: toDateStr(startDt),
+        startTime: toTimeStr(startDt),
+        endDate: toDateStr(endDt),
+        endTime: toTimeStr(endDt),
+        projectId: event.project?.id || "",
+    });
+    const [saving, setSaving] = useState(false);
+
+    const submit = async () => {
+        setSaving(true);
+        try {
+            await api.patch(`/events/${event.id}`, {
+                title: form.title,
+                description: form.description,
+                startDate: new Date(`${form.startDate}T${form.startTime}`).toISOString(),
+                endDate: new Date(`${form.endDate}T${form.endTime}`).toISOString(),
+                projectId: form.projectId || undefined,
+            });
+            onSuccess();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <CalendarDays className="h-5 w-5 text-indigo-400" /> Reschedule Event
+                    </h2>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
+                </div>
+
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Event Title</label>
+                        <input autoFocus value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Description</label>
+                        <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all min-h-[70px]" />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Project Link (Optional)</label>
+                        <select value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none">
+                            <option value="">None</option>
+                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Start Date</label>
+                            <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Start Time</label>
+                            <input type="time" value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">End Date</label>
+                            <input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">End Time</label>
+                            <input type="time" value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                    <Button variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white">Cancel</Button>
+                    <Button onClick={submit} disabled={saving || !form.title} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6">
+                        {saving ? "Saving..." : "Save Changes"}
+                    </Button>
                 </div>
             </div>
         </div>
     );
 }
 
-// ── Sub-components ──
-function EventRow({ event }: { event: CalendarEvent }) {
-    const myStatusConfig = {
-        accepted: { label: "Accepted", cls: "badge-completed" },
-        pending: { label: "Pending", cls: "badge-pending" },
-        declined: { label: "Declined", cls: "badge-stuck" },
+function CreateEventModal({ users, projects, onClose, onSuccess }: { users: { id: string; name: string; avatar?: string }[], projects: { id: string; name: string }[], onClose: () => void, onSuccess: () => void }) {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const [form, setForm] = useState({ title: "", description: "", type: "MEETING", startDate: todayStr, startTime: "09:00", endDate: todayStr, endTime: "10:00", projectId: "", participantIds: [] as string[] });
+    const [conflictWarn, setConflictWarn] = useState<{ msg: string; uids: string[] } | null>(null);
+
+    const submitFn = async (force: boolean = false) => {
+        const fullStart = new Date(`${form.startDate}T${form.startTime}`).toISOString();
+        const fullEnd = new Date(`${form.endDate}T${form.endTime}`).toISOString();
+
+        try {
+            const res = await api.post("/events", { ...form, startDate: fullStart, endDate: fullEnd });
+            if (res.data.conflictUserIds && !force) {
+                setConflictWarn({ msg: res.data.warning, uids: res.data.conflictUserIds });
+            } else {
+                onSuccess();
+            }
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <CalendarDays className="h-5 w-5 text-indigo-400" /> New Event
+                    </h2>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
+                </div>
+
+                <div className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+                    {conflictWarn ? (
+                        <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20 text-sm">
+                            <h4 className="font-bold text-orange-400 mb-1 flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Scheduling Conflict</h4>
+                            <p className="text-orange-200/80 mb-3">{conflictWarn.msg}. The following users already have an accepted event at this time:</p>
+                            <ul className="list-disc pl-5 text-orange-300 mb-4 h-max overflow-y-auto space-y-1">
+                                {conflictWarn.uids.map(uid => <li key={uid}>{users.find(u => u.id === uid)?.name || uid}</li>)}
+                            </ul>
+                            <div className="flex gap-2">
+                                <Button onClick={() => setConflictWarn(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white">Adjust Time</Button>
+                                <Button onClick={() => submitFn(true)} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white">Ignore & Schedule Anyway</Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Event Title</label>
+                                <input autoFocus required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" placeholder="e.g. Q3 Roadmap Review" />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Description</label>
+                                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600 min-h-[80px]" placeholder="Briefly describe the purpose of this event..." />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Event Type</label>
+                                    <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none">
+                                        <option value="MEETING">Meeting</option>
+                                        <option value="TRAINING">Training</option>
+                                        <option value="REVIEW">Review</option>
+                                        <option value="PRESENTATION">Presentation</option>
+                                        <option value="WEBINAR">Webinar</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Project Link (Optional)</label>
+                                    <select value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none">
+                                        <option value="">None</option>
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Start Date</label>
+                                    <input type="date" required value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Start Time</label>
+                                    <input type="time" required value={form.startTime} onChange={e => setForm({ ...form, startTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">End Date</label>
+                                    <input type="date" required value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">End Time</label>
+                                    <input type="time" required value={form.endTime} onChange={e => setForm({ ...form, endTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none block" style={{ colorScheme: "dark" }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Participants</label>
+                                <select multiple value={form.participantIds} onChange={(e) => {
+                                    const opts = Array.from(e.target.selectedOptions, option => option.value);
+                                    setForm({ ...form, participantIds: opts });
+                                }} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none form-multiselect h-32 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    {users.map(u => <option key={u.id} value={u.id} className="py-1">{u.name}</option>)}
+                                </select>
+                                <p className="text-[10px] text-slate-500 mt-1.5 px-1">Hold CMD/CTRL to select multiple</p>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {!conflictWarn && (
+                    <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                        <Button variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white">Cancel</Button>
+                        <Button onClick={() => submitFn(false)} disabled={!form.title || !form.startDate || !form.startTime || !form.endDate || !form.endTime} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6">Create Event</Button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Sub-components ──
+// ── Sub-components ──
+
+// ── Request Reschedule Modal (for participants) ──
+function RequestRescheduleModal({ event, onClose, onSuccess }: {
+    event: ApiEvent & { time: string; endTime: string };
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    const startDt = new Date(event.startDate);
+    const endDt = new Date(event.endDate);
+    const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const toTimeStr = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+    const [form, setForm] = useState({
+        reason: "",
+        suggestedStartDate: toDateStr(startDt),
+        suggestedStartTime: toTimeStr(startDt),
+        suggestedEndDate: toDateStr(endDt),
+        suggestedEndTime: toTimeStr(endDt),
+    });
+    const [saving, setSaving] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
+
+    const submit = async () => {
+        if (!form.reason.trim()) return;
+        setSaving(true);
+        try {
+            await api.post(`/events/${event.id}/reschedule-requests`, {
+                reason: form.reason,
+                suggestedStartDate: new Date(`${form.suggestedStartDate}T${form.suggestedStartTime}`).toISOString(),
+                suggestedEndDate: new Date(`${form.suggestedEndDate}T${form.suggestedEndTime}`).toISOString(),
+            });
+            setSubmitted(true);
+            setTimeout(onSuccess, 1500);
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <MessageSquare className="h-5 w-5 text-indigo-400" /> Request Reschedule
+                    </h2>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
+                </div>
+
+                {submitted ? (
+                    <div className="p-10 flex flex-col items-center gap-3 text-center">
+                        <CheckCircle className="h-10 w-10 text-emerald-400" />
+                        <p className="text-sm font-semibold text-white">Request sent!</p>
+                        <p className="text-xs text-slate-400">The organiser has been notified and will review your request.</p>
+                    </div>
+                ) : (
+                    <>
+                        <div className="p-6 space-y-4">
+                            <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
+                                <p className="text-xs text-slate-400 font-medium">Requesting reschedule for:</p>
+                                <p className="text-sm font-semibold text-white mt-1">{event.title}</p>
+                                <p className="text-xs text-slate-500">{event.time} – {event.endTime}</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1.5 ml-1">Reason <span className="text-rose-400">*</span></label>
+                                <textarea autoFocus value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })}
+                                    placeholder="Why do you need to reschedule?"
+                                    className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all min-h-[80px]" />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-400 uppercase mb-2 ml-1">Suggested New Time</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 mb-1 ml-1">Start Date</p>
+                                        <input type="date" value={form.suggestedStartDate} onChange={e => setForm({ ...form, suggestedStartDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none" style={{ colorScheme: "dark" }} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 mb-1 ml-1">Start Time</p>
+                                        <input type="time" value={form.suggestedStartTime} onChange={e => setForm({ ...form, suggestedStartTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none" style={{ colorScheme: "dark" }} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 mb-1 ml-1">End Date</p>
+                                        <input type="date" value={form.suggestedEndDate} onChange={e => setForm({ ...form, suggestedEndDate: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none" style={{ colorScheme: "dark" }} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 mb-1 ml-1">End Time</p>
+                                        <input type="time" value={form.suggestedEndTime} onChange={e => setForm({ ...form, suggestedEndTime: e.target.value })} className="w-full bg-slate-950/50 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 outline-none" style={{ colorScheme: "dark" }} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                            <Button variant="ghost" onClick={onClose} className="text-slate-400 hover:text-white">Cancel</Button>
+                            <Button onClick={submit} disabled={saving || !form.reason.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6">
+                                {saving ? "Sending..." : "Send Request"}
+                            </Button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ── Review Reschedule Modal (for creator) ──
+function ReviewRescheduleModal({ requestId, onClose, onSuccess }: {
+    requestId: string;
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    // We only have the request ID. We need to fetch the request to get eventId and details.
+    // It's a bit of a chicken/egg problem for the route URL, so we can fetch all events and scan them,
+    // or add a quick helper route. Since we already added the specific GET route `/:eventId/reschedule-requests/:reqId`
+    // but building the URL requires the eventId... wait, earlier we built the route without eventId at the root?
+    // Actually the router is mounted at `/api/events/:id/reschedule-requests`. To invoke `/:reqId` we need the eventId.
+    // Let's use React Query to fetch `GET /api/dashboard/conflicts`? No.
+    // Let's rely on the events list we already have in cache to find the event ID associated with this request.
+    // Wait, the client doesn't know the request's eventId. 
+    // We'll query all events, then search their reschedule requests? Not scalable.
+
+    // Easier way: The notification gives us `/dashboard/events?reviewRequest=${reqId}`. 
+    // Let's add a global fetch for the request by ID in the backend, or just pass `eventId` in the URL too!
+    // But since the URL is already `?reviewRequest=ID`, let's just create a quick direct API fetch:
+    const { data: reqData, isLoading, error } = useQuery({
+        queryKey: ["reviewRequest", requestId],
+        queryFn: async () => (await api.get(`/reschedule-requests/${requestId}`)).data.data
+    });
+
+    const approveMutation = useMutation({
+        mutationFn: (eventId: string) => api.patch(`/events/${eventId}/reschedule-requests/${requestId}`, { action: "APPROVE" }),
+        onSuccess: () => onSuccess()
+    });
+
+    const rejectMutation = useMutation({
+        mutationFn: (eventId: string) => api.patch(`/events/${eventId}/reschedule-requests/${requestId}`, { action: "REJECT" }),
+        onSuccess: () => onSuccess()
+    });
+
+    if (isLoading) return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div className="animate-spin h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full" /></div>;
+    if (error || !reqData) return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl">
+                <p className="text-rose-400">Failed to load request. It may have already been resolved.</p>
+                <Button onClick={onClose} className="w-full mt-4 bg-slate-800">Close</Button>
+            </div>
+        </div>
+    );
+
+    const sd = new Date(reqData.suggestedStartDate);
+    const ed = new Date(reqData.suggestedEndDate);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <CalendarDays className="h-5 w-5 text-indigo-400" /> Review Reschedule Request
+                    </h2>
+                    <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
+                </div>
+
+                <div className="p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                            {reqData.requester.name.charAt(0)}
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-white">{reqData.requester.name}</p>
+                            <p className="text-[11px] text-slate-400">Requested a schedule change for <span className="text-white font-medium">{reqData.event.title}</span></p>
+                        </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                        <div>
+                            <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase mb-1">Reason</p>
+                            <p className="text-sm text-slate-300 bg-slate-900/50 p-3 rounded-lg border border-slate-800">{reqData.reason}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-2">
+                            <div>
+                                <p className="text-[10px] font-bold tracking-wider text-slate-500 uppercase mb-1">Current Schedule</p>
+                                <p className="text-xs text-rose-300/80 line-through decoration-rose-500/50">
+                                    {new Date(reqData.event.startDate).toLocaleDateString()} at {new Date(reqData.event.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold tracking-wider text-indigo-400 uppercase mb-1">Suggested Schedule</p>
+                                <p className="text-xs text-emerald-400 font-medium">
+                                    {sd.toLocaleDateString()} at {sd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    <br />
+                                    <span className="text-slate-500 text-[10px]">until {ed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+                    <Button variant="ghost" onClick={onClose} disabled={approveMutation.isPending || rejectMutation.isPending} className="text-slate-400 hover:text-white">Cancel</Button>
+                    <Button onClick={() => rejectMutation.mutate(reqData.eventId)} disabled={approveMutation.isPending || rejectMutation.isPending} className="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white">
+                        {rejectMutation.isPending ? "Updating..." : "Reject Request"}
+                    </Button>
+                    <Button onClick={() => approveMutation.mutate(reqData.eventId)} disabled={approveMutation.isPending || rejectMutation.isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                        {approveMutation.isPending ? "Updating..." : "Approve & Update Event"}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function EventRow({ event, qc, onReschedule, onRequestReschedule }: {
+    event: ApiEvent & { date: string, time: string, endTime: string, myStatus: string, isCreator: boolean },
+    qc: QueryClient,
+    onReschedule: (ev: typeof event) => void,
+    onRequestReschedule: (ev: typeof event) => void,
+}) {
+    const myStatusConfig = {
+        ACCEPTED: { label: "Accepted", cls: "badge-completed" },
+        PENDING: { label: "Pending", cls: "badge-pending" },
+        DECLINED: { label: "Declined", cls: "badge-stuck" },
+    };
+
+    const updateInvite = useMutation({
+        mutationFn: (status: "ACCEPTED" | "DECLINED") => api.patch(`/events/${event.id}/invite-response`, { status }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] })
+    });
+
+    const deleteEvent = useMutation({
+        mutationFn: () => api.delete(`/events/${event.id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] })
+    });
+
+    const completeEvent = useMutation({
+        mutationFn: () => api.patch(`/events/${event.id}/complete`, { minutes: "Completed via Dashboard" }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["events"] })
+    });
+
+    return (
         <div className={`flex gap-4 px-5 py-4 hover:bg-slate-800/30 transition-colors ${event.hasConflict ? "border-l-2 border-rose-500 pl-[18px]" : ""}`}>
-            {/* Type dot + time column */}
+            {/* Dot + time column */}
             <div className="flex flex-col items-center gap-1.5 pt-1 shrink-0">
-                <span className={`w-2.5 h-2.5 rounded-full ${TYPE_DOT[event.type]}`} />
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
                 <div className="w-px flex-1 bg-slate-800" />
             </div>
 
@@ -231,38 +769,77 @@ function EventRow({ event }: { event: CalendarEvent }) {
                                 </span>
                             )}
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">{event.project}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{event.project?.name || "No Project"}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${myStatusConfig[event.myStatus].cls}`}>
-                            {myStatusConfig[event.myStatus].label}
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${myStatusConfig[event.myStatus as InviteStatus].cls}`}>
+                            {myStatusConfig[event.myStatus as InviteStatus].label}
                         </span>
-                        <button className="p-1 rounded-lg text-slate-600 hover:text-white hover:bg-slate-800 transition-colors">
-                            <MoreHorizontal className="h-4 w-4" />
-                        </button>
+
+                        {/* Actions */}
+                        <div className="shrink-0 flex items-start pl-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-700">
+                                    {event.isCreator && event.status !== "COMPLETED" && (
+                                        <DropdownMenuItem onClick={() => completeEvent.mutate()} className="text-emerald-400 focus:text-emerald-300 focus:bg-emerald-500/10 cursor-pointer">
+                                            <CheckCircle className="h-4 w-4 mr-2" /> Mark Completed
+                                        </DropdownMenuItem>
+                                    )}
+                                    {event.isCreator && event.status !== "COMPLETED" && (
+                                        <DropdownMenuItem onClick={() => onReschedule(event)} className="text-indigo-400 focus:text-indigo-300 focus:bg-indigo-500/10 cursor-pointer">
+                                            <CalendarDays className="h-4 w-4 mr-2" /> Reschedule
+                                        </DropdownMenuItem>
+                                    )}
+                                    {event.isCreator && (
+                                        <DropdownMenuItem onClick={() => deleteEvent.mutate()} className="text-rose-400 focus:text-rose-300 focus:bg-rose-500/10 cursor-pointer">
+                                            <Trash className="h-4 w-4 mr-2" /> Delete Event
+                                        </DropdownMenuItem>
+                                    )}
+                                    {!event.isCreator && event.status !== "COMPLETED" && (
+                                        <DropdownMenuItem onClick={() => onRequestReschedule(event)} className="text-indigo-400 focus:text-indigo-300 focus:bg-indigo-500/10 cursor-pointer">
+                                            <MessageSquare className="h-4 w-4 mr-2" /> Request Reschedule
+                                        </DropdownMenuItem>
+                                    )}
+                                    {!event.isCreator && (
+                                        <DropdownMenuItem className="text-slate-300 focus:bg-slate-800 cursor-pointer">
+                                            View Details
+                                        </DropdownMenuItem>
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                 </div>
 
                 {/* Meta info */}
                 <div className="flex flex-wrap gap-4 mt-3 text-xs text-slate-500">
                     <span className="flex items-center gap-1.5">
+                        <CalendarDays className="h-3.5 w-3.5 shrink-0" /> {new Date(event.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – {new Date(event.endDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </span>
+                    <span className="flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5 shrink-0" /> {event.time} – {event.endTime}
                     </span>
                     <span className="flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5 shrink-0" /> {event.participants} participants
-                    </span>
-                    <span className={`capitalize flex items-center gap-1.5 ${TYPE_COLORS[event.type].split(" ").find(c => c.startsWith("text-")) ?? ""}`}>
-                        <MapPin className="h-3.5 w-3.5 shrink-0" /> {event.type}
+                        <Users className="h-3.5 w-3.5 shrink-0" /> {event.participants.length} participants
                     </span>
                 </div>
 
                 {/* Invite action buttons */}
-                {event.myStatus === "pending" && (
+                {event.myStatus === "PENDING" && !event.isCreator && (
                     <div className="flex gap-2 mt-3">
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 text-xs font-semibold transition-colors border border-emerald-500/25">
+                        <button onClick={() => updateInvite.mutate("ACCEPTED")}
+                            disabled={updateInvite.isPending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 text-xs font-semibold transition-colors border border-emerald-500/25 disabled:opacity-50">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Accept
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 text-xs font-semibold transition-colors border border-rose-500/25">
+                        <button onClick={() => updateInvite.mutate("DECLINED")}
+                            disabled={updateInvite.isPending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 text-xs font-semibold transition-colors border border-rose-500/25 disabled:opacity-50">
                             <XCircle className="h-3.5 w-3.5" /> Decline
                         </button>
                     </div>

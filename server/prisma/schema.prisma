@@ -35,10 +35,33 @@ enum EventStatus {
   CANCELLED
 }
 
+enum EventType {
+  MEETING
+  TRAINING
+  REVIEW
+  PRESENTATION
+  WEBINAR
+  OTHER
+}
+
 enum InviteStatus {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotifType {
+  RESCHEDULE_REQUEST
+  RESCHEDULE_APPROVED
+  RESCHEDULE_REJECTED
+  EVENT_RESCHEDULED
+  EVENT_INVITE
 }
 
 // ----------------------------------------------------
@@ -54,15 +77,17 @@ model User {
   avatar      String? // Profile picture URL
 
   // Relations
-  managedProjects    Project[]          @relation("ProjectManager")
-  arrProjects        Project[]          @relation("ProjectARR")
-  createdTasks       Task[]             @relation("TaskCreator")
-  assignedTasks      Task[]             @relation("TaskAssignee")
-  activities         TaskActivity[]     @relation("ActivityCreator")
-  collabTasks        Task[]             @relation("TaskCollaborators")
-  eventsCreated      Event[]            @relation("EventCreator")
+  managedProjects    Project[]           @relation("ProjectManager")
+  arrProjects        Project[]           @relation("ProjectARR")
+  createdTasks       Task[]              @relation("TaskCreator")
+  assignedTasks      Task[]              @relation("TaskAssignee")
+  activities         TaskActivity[]      @relation("ActivityCreator")
+  collabTasks        Task[]              @relation("TaskCollaborators")
+  eventsCreated      Event[]             @relation("EventCreator")
   eventInvites       EventParticipant[]
   projectMemberships ProjectEmployee[]
+  rescheduleRequests RescheduleRequest[] @relation("RescheduleRequester")
+  notifications      Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,6 +179,7 @@ model Event {
   title       String
   description String?
   agenda      String?
+  type        EventType   @default(MEETING)
   startDate   DateTime
   endDate     DateTime
   status      EventStatus @default(SCHEDULED)
@@ -171,11 +197,42 @@ model Event {
   creatorId String
   creator   User   @relation("EventCreator", fields: [creatorId], references: [id])
 
-  participants EventParticipant[]
-  documents    EventDocument[]
+  participants       EventParticipant[]
+  documents          EventDocument[]
+  rescheduleRequests RescheduleRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model RescheduleRequest {
+  id                 String           @id @default(uuid())
+  reason             String
+  suggestedStartDate DateTime?
+  suggestedEndDate   DateTime?
+  status             RescheduleStatus @default(PENDING)
+
+  eventId   String
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  requesterId String
+  requester   User   @relation("RescheduleRequester", fields: [requesterId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id      String    @id @default(uuid())
+  type    NotifType
+  title   String
+  body    String
+  link    String?
+  isRead  Boolean   @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 }
 
 model EventParticipant {

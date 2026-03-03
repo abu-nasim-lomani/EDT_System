@@ -6,6 +6,8 @@ import { taskRouter } from "./routes/task.routes";
 import { eventRouter } from "./routes/event.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { usersRouter } from "./routes/users.routes";
+import { rescheduleRouter } from "./routes/reschedule.routes";
+import { notificationRouter } from "./routes/notification.routes";
 
 export const createApp = () => {
     const app = express();
@@ -27,6 +29,9 @@ export const createApp = () => {
     app.use("/api/projects", projectRouter);
     app.use("/api/tasks", taskRouter);
     app.use("/api/events", eventRouter);
+    app.use("/api/events/:id/reschedule-requests", rescheduleRouter);
+    app.use("/api/reschedule-requests", rescheduleRouter); // Global lookup support
+    app.use("/api/notifications", notificationRouter);
     app.use("/api/dashboard", dashboardRouter);
 
     // Global error handler

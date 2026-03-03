@@ -10,6 +10,7 @@ const EventSchema = z.object({
     title: z.string().min(2),
     description: z.string().optional(),
     agenda: z.string().optional(),
+    type: z.enum(["MEETING", "TRAINING", "REVIEW", "PRESENTATION", "WEBINAR", "OTHER"]).optional(),
     startDate: z.string().datetime(),
     endDate: z.string().datetime(),
     projectId: z.string().uuid().optional(),
@@ -106,6 +107,45 @@ eventRouter.patch("/:id/complete", async (req: AuthRequest, res: Response): Prom
         data: { status: "COMPLETED", minutes },
     });
     res.json({ success: true, data: completed });
+});
+
+// ── PATCH /api/events/:id ── (edit/reschedule by creator)
+eventRouter.patch("/:id", async (req: AuthRequest, res: Response): Promise<void> => {
+    const id = req.params.id as string;
+    const event = await prisma.event.findUnique({ where: { id } });
+    if (!event) { res.status(404).json({ success: false, message: "Event not found" }); return; }
+    if (event.creatorId !== req.user!.userId && req.user!.role !== "SENIOR_MANAGEMENT") {
+        res.status(403).json({ success: false, message: "Unauthorized" }); return;
+    }
+    const { title, description, agenda, startDate, endDate, projectId } = req.body as {
+        title?: string; description?: string; agenda?: string;
+        startDate?: string; endDate?: string; projectId?: string;
+    };
+    const updated = await prisma.event.update({
+        where: { id },
+        data: {
+            ...(title && { title }),
+            ...(description !== undefined && { description }),
+            ...(agenda !== undefined && { agenda }),
+            ...(startDate && { startDate: new Date(startDate) }),
+            ...(endDate && { endDate: new Date(endDate) }),
+            ...(projectId !== undefined && { projectId: projectId || null }),
+        },
+    });
+    res.json({ success: true, data: updated });
+});
+
+// ── DELETE /api/events/:id ──
+eventRouter.delete("/:id", async (req: AuthRequest, res: Response): Promise<void> => {
+    const id = req.params.id as string;
+    const event = await prisma.event.findUnique({ where: { id } });
+    if (!event) { res.status(404).json({ success: false, message: "Event not found" }); return; }
+    if (event.creatorId !== req.user!.userId && req.user!.role !== "SENIOR_MANAGEMENT") {
+        res.status(403).json({ success: false, message: "Unauthorized" }); return;
+    }
+
+    await prisma.event.delete({ where: { id } });
+    res.json({ success: true, message: "Event deleted" });
 });
 
 // ── GET /api/events/:id ──

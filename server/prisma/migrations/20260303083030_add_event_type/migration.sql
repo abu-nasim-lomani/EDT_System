@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "EventType" AS ENUM ('MEETING', 'TRAINING', 'REVIEW', 'PRESENTATION', 'WEBINAR', 'OTHER');
+
+-- AlterTable
+ALTER TABLE "Event" ADD COLUMN     "type" "EventType" NOT NULL DEFAULT 'MEETING';
