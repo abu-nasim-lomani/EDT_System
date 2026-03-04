@@ -61,7 +61,7 @@ export default function LoginPage() {
                 </div>
 
                 <div className="relative z-10 flex items-center gap-3 text-sm text-indigo-200 p-2 px-4 rounded-full bg-white/10 backdrop-blur-md w-fit border border-white/10">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/UNDP_logo.svg/200px-UNDP_logo.svg.png" alt="UNDP" className="h-6 object-contain" />
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/UNDP_logo.svg/960px-UNDP_logo.svg.png" alt="UNDP" className="h-6 object-contain" />
                     <div className="flex gap-2 items-center">
                         <span className="font-medium text-white">AI & Digital Hub</span>
                         <span className="text-indigo-300">&bull;</span>
