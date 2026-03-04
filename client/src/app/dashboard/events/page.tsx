@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Trash, CheckCircle, MessageSquare, Lightbulb, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, Users, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Trash, CheckCircle, MessageSquare, Lightbulb, ArrowRight, Loader2, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -55,11 +55,12 @@ function EventsPageContent() {
     const [reviewRequestId, setReviewRequestId] = useState<string | null>(searchParams.get("reviewRequest"));
 
     // Sync query param -> state (for when nav link clicked while already on page)
-    useEffect(() => {
-        const reqId = searchParams.get("reviewRequest");
+    const reqId = searchParams.get("reviewRequest");
+    const [prevReqId, setPrevReqId] = useState(reqId);
+    if (reqId !== prevReqId) {
+        setPrevReqId(reqId);
         if (reqId) setReviewRequestId(reqId);
-    }, [searchParams]);
-
+    }
     const closeReviewModal = () => {
         setReviewRequestId(null);
         if (searchParams.has("reviewRequest")) {
@@ -338,7 +339,7 @@ function RescheduleModal({ event, projects, onClose, onSuccess }: {
             <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/20">
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                        <CalendarDays className="h-5 w-5 text-indigo-400" /> Reschedule Event
+                        <Edit className="h-5 w-5 text-indigo-400" /> Edit Event
                     </h2>
                     <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><XCircle className="h-5 w-5" /></button>
                 </div>
@@ -804,7 +805,7 @@ function EventRow({ event, qc, onReschedule, onRequestReschedule, onViewDecision
                                     )}
                                     {event.isCreator && event.status !== "COMPLETED" && (
                                         <DropdownMenuItem onClick={() => onReschedule(event)} className="text-indigo-400 focus:text-indigo-300 focus:bg-indigo-500/10 cursor-pointer">
-                                            <CalendarDays className="h-4 w-4 mr-2" /> Reschedule
+                                            <Edit className="h-4 w-4 mr-2" /> Edit Event
                                         </DropdownMenuItem>
                                     )}
                                     {event.isCreator && (
@@ -881,10 +882,14 @@ function EventDecisionsModal({ event, projects, users, onClose, onSuccess }: {
     onClose: () => void;
     onSuccess: () => void;
 }) {
-    const qc = useQueryClient();
     const [newDecision, setNewDecision] = useState("");
     const [savingDecision, setSavingDecision] = useState(false);
     const [convertDecision, setConvertDecision] = useState<Decision | null>(null);
+
+    const [editDecisionId, setEditDecisionId] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [updatingDecision, setUpdatingDecision] = useState<string | null>(null);
+    const [deletingDecisionId, setDeletingDecisionId] = useState<string | null>(null);
 
     const { data: decisions = [], isLoading, refetch } = useQuery<Decision[]>({
         queryKey: ["event-decisions", event.id],
@@ -900,6 +905,27 @@ function EventDecisionsModal({ event, projects, users, onClose, onSuccess }: {
             refetch();
         } catch (e) { console.error(e); }
         finally { setSavingDecision(false); }
+    };
+
+    const saveEdit = async (dId: string) => {
+        if (!editValue.trim()) return;
+        setUpdatingDecision(dId);
+        try {
+            await api.patch(`/events/${event.id}/decisions/${dId}`, { summary: editValue.trim() });
+            setEditDecisionId(null);
+            refetch();
+        } catch (e) { console.error(e); }
+        finally { setUpdatingDecision(null); }
+    };
+
+    const deleteDecision = async (dId: string) => {
+        if (!confirm("Are you sure you want to delete this decision?")) return;
+        setDeletingDecisionId(dId);
+        try {
+            await api.delete(`/events/${event.id}/decisions/${dId}`);
+            refetch();
+        } catch (e) { console.error(e); }
+        finally { setDeletingDecisionId(null); }
     };
 
     if (convertDecision) {
@@ -954,22 +980,49 @@ function EventDecisionsModal({ event, projects, users, onClose, onSuccess }: {
                     ) : (
                         <div className="space-y-2">
                             {decisions.map(d => (
-                                <div key={d.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                                <div key={d.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 group relative">
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-slate-200">{d.summary}</p>
-                                        {d.task ? (
-                                            <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-                                                <CheckCircle className="h-3 w-3" /> Linked to: {d.task.title}
-                                                <span className="ml-1 text-[10px] text-slate-500">({d.task.status})</span>
-                                            </p>
+                                        {editDecisionId === d.id ? (
+                                            <div className="flex gap-2">
+                                                <input
+                                                    value={editValue}
+                                                    onChange={e => setEditValue(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === "Enter") saveEdit(d.id); if (e.key === "Escape") setEditDecisionId(null); }}
+                                                    autoFocus
+                                                    className="flex-1 bg-slate-950/80 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500/60 transition-all"
+                                                />
+                                                <Button onClick={() => saveEdit(d.id)} disabled={updatingDecision === d.id || !editValue.trim()} size="sm" className="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 border border-emerald-500/30 px-3 py-0 h-8">
+                                                    {updatingDecision === d.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                                </Button>
+                                                <Button onClick={() => setEditDecisionId(null)} size="sm" variant="ghost" className="text-slate-400 hover:text-white px-2 py-0 h-8"><XCircle className="h-4 w-4" /></Button>
+                                            </div>
                                         ) : (
-                                            <p className="text-xs text-slate-500 mt-1">Not yet converted to task</p>
+                                            <>
+                                                <p className="text-sm text-slate-200 pr-12">{d.summary}</p>
+                                                {d.task ? (
+                                                    <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                                                        <CheckCircle className="h-3 w-3" /> Linked to: {d.task.title}
+                                                        <span className="ml-1 text-[10px] text-slate-500">({d.task.status})</span>
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-xs text-slate-500 mt-1">Not yet converted to task</p>
+                                                )}
+
+                                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                                                    <button onClick={() => { setEditDecisionId(d.id); setEditValue(d.summary); }} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors" title="Edit Decision">
+                                                        <Edit className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button onClick={() => deleteDecision(d.id)} disabled={deletingDecisionId === d.id} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-50" title="Delete Decision">
+                                                        {deletingDecisionId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash className="h-3.5 w-3.5" />}
+                                                    </button>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
-                                    {!d.task && (
+                                    {!d.task && editDecisionId !== d.id && (
                                         <button
                                             onClick={() => setConvertDecision(d)}
-                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-xs font-semibold transition-colors border border-indigo-500/25"
+                                            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-xs font-semibold transition-colors border border-indigo-500/25 mt-0.5"
                                         >
                                             Convert <ArrowRight className="h-3 w-3" />
                                         </button>

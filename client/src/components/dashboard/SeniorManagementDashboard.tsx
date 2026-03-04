@@ -117,12 +117,11 @@ export function SeniorManagementDashboard() {
     return (
         <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
             {/* A. Executive KPI Summary (Top Row - Snapshot View) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                 <MetricCard title="Total Projects" value={kpis.totalProjects} icon={Briefcase} color="indigo" />
                 <MetricCard title="Total Events" value={kpis.totalEvents} icon={CalendarDays} color="indigo" />
                 <MetricCard title="Upcoming Events" value={kpis.upcomingEvents} icon={Calendar} color="blue" />
                 <MetricCard title="Completed Tasks" value={kpis.completedTasks} icon={CheckCircle2} color="green" />
-                <MetricCard title="Completed Proj" value={kpis.completedProjects} icon={CheckCircle2} color="emerald" />
                 <MetricCard title="In Progress Tasks" value={kpis.totalActiveTasks} icon={CheckSquare} color="blue" />
                 <MetricCard title="Overdue Tasks" value={kpis.overdueTasks} icon={AlertCircle} color="red" alert={kpis.overdueTasks > 0} />
                 <MetricCard title="Pending Approv" value={kpis.approvalPendingEvents} icon={User} color="amber" alert={kpis.approvalPendingEvents > 0} />

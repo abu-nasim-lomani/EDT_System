@@ -60,9 +60,9 @@ export default function LoginPage() {
                     </p>
                 </div>
 
-                <div className="relative z-10 flex items-center gap-3 text-sm text-indigo-200 p-2 px-4 rounded-full bg-white/10 backdrop-blur-md w-fit border border-white/10">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/UNDP_logo.svg/960px-UNDP_logo.svg.png" alt="UNDP" className="h-6 object-contain" />
-                    <div className="flex gap-2 items-center">
+                <div className="relative z-10 flex items-end gap-4">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/UNDP_logo.svg/960px-UNDP_logo.svg.png" alt="UNDP" className="h-[100px] object-contain drop-shadow-md" />
+                    <div className="flex items-center gap-2 text-sm text-indigo-200 p-2 px-4 mb-2 rounded-full bg-white/10 backdrop-blur-md w-fit border border-white/10">
                         <span className="font-medium text-white">AI & Digital Hub</span>
                         <span className="text-indigo-300">&bull;</span>
                         <span className="text-indigo-50">UNDP CO, BD</span>
