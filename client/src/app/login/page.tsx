@@ -1,8 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Lock, Mail, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
-import Image from "next/image";
+import { Activity, ArrowRight, Lock, Mail, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -45,8 +44,8 @@ export default function LoginPage() {
 
                 {/* Logo */}
                 <div className="relative z-10 flex items-center gap-2">
-                    <div className="bg-white/90 p-1.5 rounded-lg flex items-center justify-center">
-                        <Image src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/UNDP_logo.svg/200px-UNDP_logo.svg.png" alt="UNDP Logo" width={28} height={28} className="object-contain" unoptimized />
+                    <div className="bg-white/20 p-2 rounded-xl backdrop-blur-md">
+                        <Activity className="h-6 w-6 text-white" />
                     </div>
                     <span className="text-xl font-bold tracking-tight">EDT System</span>
                 </div>
@@ -61,9 +60,13 @@ export default function LoginPage() {
                     </p>
                 </div>
 
-                <div className="relative z-10 flex gap-4 text-sm text-indigo-200">
-                    <span>AI & Digital Hub</span><span>&bull;</span>
-                    <span>UNDP CO, BD</span>
+                <div className="relative z-10 flex items-center gap-3 text-sm text-indigo-200 p-2 px-4 rounded-full bg-white/10 backdrop-blur-md w-fit border border-white/10">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/UNDP_logo.svg/200px-UNDP_logo.svg.png" alt="UNDP" className="h-6 object-contain" />
+                    <div className="flex gap-2 items-center">
+                        <span className="font-medium text-white">AI & Digital Hub</span>
+                        <span className="text-indigo-300">&bull;</span>
+                        <span className="text-indigo-50">UNDP CO, BD</span>
+                    </div>
                 </div>
             </div>
 
@@ -75,8 +78,8 @@ export default function LoginPage() {
                 <div className="w-full max-w-md space-y-8 relative z-10">
                     {/* Mobile logo */}
                     <div className="flex lg:hidden items-center gap-2 justify-center mb-2">
-                        <div className="bg-white p-1 rounded-lg flex items-center justify-center">
-                            <Image src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/UNDP_logo.svg/200px-UNDP_logo.svg.png" alt="UNDP Logo" width={20} height={20} className="object-contain" unoptimized />
+                        <div className="bg-indigo-600 p-2 rounded-xl">
+                            <Activity className="h-5 w-5 text-white" />
                         </div>
                         <span className="text-lg font-bold text-white">EDT System</span>
                     </div>
