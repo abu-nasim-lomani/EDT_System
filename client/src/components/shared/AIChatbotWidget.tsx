@@ -20,19 +20,18 @@ export function AIChatbotWidget() {
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Only show for authorized roles
-    if (!user || (user.role !== "SENIOR_MANAGEMENT" && user.role !== "PROJECT_MANAGER")) {
-        return null;
-    }
-
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
         if (isOpen) scrollToBottom();
     }, [messages, isOpen]);
+
+    // Only show for authorized roles
+    if (!user || (user.role !== "SENIOR_MANAGEMENT" && user.role !== "PROJECT_MANAGER")) {
+        return null;
+    }
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -267,7 +267,7 @@ exports.dashboardRouter.get("/executive", (0, auth_middleware_1.requireRole)("SE
                 take: 8,
                 orderBy: { createdAt: "desc" },
                 include: {
-                    event: { select: { title: true, project: { select: { name: true } } } },
+                    event: { select: { id: true, title: true, project: { select: { id: true, name: true } } } },
                     task: {
                         select: {
                             id: true,
@@ -289,7 +289,10 @@ exports.dashboardRouter.get("/executive", (0, auth_middleware_1.requireRole)("SE
             completedProjects: allProjects.filter(p => p.status === "COMPLETED").length,
             totalActiveTasks: allTasks.filter(t => t.status !== "COMPLETED").length,
             overdueTasks: allTasks.filter(t => t.endDate && t.endDate < now && t.status !== "COMPLETED").length,
-            approvalPendingEvents: allEvents.filter(e => e.participants.some(p => p.status === "PENDING")).length
+            approvalPendingEvents: allEvents.filter(e => e.participants.some(p => p.status === "PENDING")).length,
+            completedTasks: allTasks.filter(t => t.status === "COMPLETED").length,
+            totalEvents: allEvents.length,
+            upcomingEvents: allEvents.filter(e => e.startDate >= startOfToday).length
         };
         // B. Project Health Overview
         const projectHealth = allProjects.map(p => {
@@ -345,7 +348,9 @@ exports.dashboardRouter.get("/executive", (0, auth_middleware_1.requireRole)("SE
         const decisions = recentDecisions.map(d => ({
             id: d.id,
             summary: d.summary,
+            eventId: d.event?.id || null,
             eventName: d.event?.title || "Unknown Event",
+            projectId: d.event?.project?.id || null,
             projectName: d.event?.project?.name || null,
             convertedToTask: !!d.taskId,
             taskId: d.task?.id || null,

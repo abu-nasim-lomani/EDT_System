@@ -2,13 +2,13 @@
 
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import {
     Briefcase,
     CheckSquare,
     AlertTriangle,
     CalendarDays,
-    TrendingUp,
     CheckCircle2,
     Clock,
     AlertCircle,
@@ -30,6 +30,9 @@ interface ExecutiveData {
         totalActiveTasks: number;
         overdueTasks: number;
         approvalPendingEvents: number;
+        completedTasks: number;
+        totalEvents: number;
+        upcomingEvents: number;
     };
     projectHealth: Array<{
         id: string;
@@ -61,7 +64,9 @@ interface ExecutiveData {
     decisions: Array<{
         id: string;
         summary: string;
+        eventId: string | null;
         eventName: string;
+        projectId: string | null;
         projectName: string | null;
         convertedToTask: boolean;
         taskId: string | null;
@@ -107,18 +112,18 @@ export function SeniorManagementDashboard() {
         );
     }
 
-    const { kpis, projectHealth, risks, schedule, calendarEvents, decisions, trend } = executiveData;
+    const { kpis, projectHealth, risks, schedule, calendarEvents, decisions } = executiveData;
 
     return (
         <div className="space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
             {/* A. Executive KPI Summary (Top Row - Snapshot View) */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <MetricCard title="Total Projects" value={kpis.totalProjects} icon={Briefcase} color="indigo" />
-                <MetricCard title="Running" value={kpis.runningProjects} icon={TrendingUp} color="emerald" />
-                <MetricCard title="Pending" value={kpis.pendingProjects} icon={Clock} color="slate" />
-                <MetricCard title="Stuck" value={kpis.stuckProjects} icon={AlertTriangle} color="rose" />
-                <MetricCard title="Completed" value={kpis.completedProjects} icon={CheckCircle2} color="green" />
-                <MetricCard title="Active Tasks" value={kpis.totalActiveTasks} icon={CheckSquare} color="blue" />
+                <MetricCard title="Total Events" value={kpis.totalEvents} icon={CalendarDays} color="indigo" />
+                <MetricCard title="Upcoming Events" value={kpis.upcomingEvents} icon={Calendar} color="blue" />
+                <MetricCard title="Completed Tasks" value={kpis.completedTasks} icon={CheckCircle2} color="green" />
+                <MetricCard title="Completed Proj" value={kpis.completedProjects} icon={CheckCircle2} color="emerald" />
+                <MetricCard title="In Progress Tasks" value={kpis.totalActiveTasks} icon={CheckSquare} color="blue" />
                 <MetricCard title="Overdue Tasks" value={kpis.overdueTasks} icon={AlertCircle} color="red" alert={kpis.overdueTasks > 0} />
                 <MetricCard title="Pending Approv" value={kpis.approvalPendingEvents} icon={User} color="amber" alert={kpis.approvalPendingEvents > 0} />
             </div>
@@ -219,19 +224,33 @@ export function SeniorManagementDashboard() {
                                     {/* Chain: Event → Project → Task */}
                                     <div className="flex items-center gap-2 text-[11px] flex-wrap">
                                         {/* Event */}
-                                        <span className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50">
-                                            <Calendar className="h-3 w-3 text-indigo-400 shrink-0" />
-                                            <span className="text-slate-300 font-medium truncate max-w-[100px]">{d.eventName}</span>
-                                        </span>
+                                        {d.eventId ? (
+                                            <Link href={`/dashboard/events`} className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50 hover:bg-slate-700/60 transition-colors">
+                                                <Calendar className="h-3 w-3 text-indigo-400 shrink-0" />
+                                                <span className="text-indigo-300 hover:text-indigo-200 font-medium truncate max-w-[100px]">{d.eventName}</span>
+                                            </Link>
+                                        ) : (
+                                            <span className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50">
+                                                <Calendar className="h-3 w-3 text-indigo-400 shrink-0" />
+                                                <span className="text-slate-300 font-medium truncate max-w-[100px]">{d.eventName}</span>
+                                            </span>
+                                        )}
 
                                         {d.projectName && (
                                             <>
                                                 <ArrowRight className="h-3 w-3 text-slate-600 shrink-0" />
                                                 {/* Project */}
-                                                <span className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50">
-                                                    <FolderKanban className="h-3 w-3 text-purple-400 shrink-0" />
-                                                    <span className="text-slate-300 font-medium truncate max-w-[100px]">{d.projectName}</span>
-                                                </span>
+                                                {d.projectId ? (
+                                                    <Link href={`/dashboard/projects/${d.projectId}`} className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50 hover:bg-slate-700/60 transition-colors">
+                                                        <FolderKanban className="h-3 w-3 text-purple-400 shrink-0" />
+                                                        <span className="text-purple-300 hover:text-purple-200 font-medium truncate max-w-[100px]">{d.projectName}</span>
+                                                    </Link>
+                                                ) : (
+                                                    <span className="flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-700/50">
+                                                        <FolderKanban className="h-3 w-3 text-purple-400 shrink-0" />
+                                                        <span className="text-slate-300 font-medium truncate max-w-[100px]">{d.projectName}</span>
+                                                    </span>
+                                                )}
                                             </>
                                         )}
 
@@ -239,10 +258,17 @@ export function SeniorManagementDashboard() {
                                             <>
                                                 <ArrowRight className="h-3 w-3 text-slate-600 shrink-0" />
                                                 {/* Task */}
-                                                <span className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/25">
-                                                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                                                    <span className="text-emerald-300 font-medium truncate max-w-[100px]">{d.taskTitle}</span>
-                                                </span>
+                                                {d.taskId ? (
+                                                    <Link href={`/dashboard/tasks/${d.taskId}`} className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/25 hover:bg-emerald-500/20 transition-colors">
+                                                        <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                        <span className="text-emerald-300 hover:text-emerald-200 font-medium truncate max-w-[100px]">{d.taskTitle}</span>
+                                                    </Link>
+                                                ) : (
+                                                    <span className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/25">
+                                                        <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                        <span className="text-emerald-300 font-medium truncate max-w-[100px]">{d.taskTitle}</span>
+                                                    </span>
+                                                )}
                                             </>
                                         ) : (
                                             <>
@@ -264,7 +290,7 @@ export function SeniorManagementDashboard() {
                                                     <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                                         <div
                                                             className={`h-full rounded-full transition-all ${d.taskStatus === 'COMPLETED' ? 'bg-emerald-500' :
-                                                                    d.taskStatus === 'STUCK' ? 'bg-rose-500' : 'bg-indigo-500'
+                                                                d.taskStatus === 'STUCK' ? 'bg-rose-500' : 'bg-indigo-500'
                                                                 }`}
                                                             style={{ width: `${d.taskProgress}%` }}
                                                         />
@@ -275,9 +301,9 @@ export function SeniorManagementDashboard() {
 
                                             {/* Status Badge */}
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${d.taskStatus === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' :
-                                                    d.taskStatus === 'IN_PROGRESS' ? 'bg-indigo-500/10 text-indigo-400' :
-                                                        d.taskStatus === 'STUCK' ? 'bg-rose-500/10 text-rose-400' :
-                                                            'bg-slate-500/10 text-slate-400'
+                                                d.taskStatus === 'IN_PROGRESS' ? 'bg-indigo-500/10 text-indigo-400' :
+                                                    d.taskStatus === 'STUCK' ? 'bg-rose-500/10 text-rose-400' :
+                                                        'bg-slate-500/10 text-slate-400'
                                                 }`}>{d.taskStatus}</span>
 
                                             {/* Assignee */}
@@ -431,25 +457,6 @@ export function SeniorManagementDashboard() {
                 </div>
             </div>
 
-            {/* G. Project Completion Trend (Optional) */}
-            <div className="edt-card rounded-2xl p-6 border border-slate-800 bg-slate-900/50 backdrop-blur-md shadow-xl flex items-end justify-between h-32">
-                <div className="self-start">
-                    <h3 className="text-sm font-semibold text-white">Project Completion Velocity</h3>
-                    <p className="text-xs text-slate-500">Last 6 Months (Simulated Chart)</p>
-                </div>
-                <div className="flex items-end gap-2 h-full pt-4">
-                    {trend.map((t, i) => (
-                        <div key={i} className="flex flex-col items-center gap-2 group">
-                            <div className="w-12 bg-indigo-500/20 rounded-t-md relative group-hover:bg-indigo-500/40 transition-colors" style={{ height: `${Math.max(10, t.completed * 20)}px` }}>
-                                <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {t.completed}
-                                </div>
-                            </div>
-                            <span className="text-[10px] text-slate-500 uppercase tracking-widest">{t.month}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 }
